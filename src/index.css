@@ -2,95 +2,130 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Definition of the design system. All colors, gradients, fonts, etc should be defined here. 
-All colors MUST be HSL.
-*/
+/* GolfMarket Design System - Premium Golf Aesthetic */
+
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;600;700&family=Source+Sans+3:wght@300;400;500;600;700&display=swap');
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
+    /* Golf-inspired color palette - Deep greens, cream, dark text */
+    --background: 60 20% 98%;
+    --foreground: 160 30% 10%;
 
     --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
+    --card-foreground: 160 30% 10%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
+    --popover-foreground: 160 30% 10%;
 
-    --primary: 222.2 47.4% 11.2%;
-    --primary-foreground: 210 40% 98%;
+    /* Primary - Deep golf green */
+    --primary: 152 45% 28%;
+    --primary-foreground: 60 20% 98%;
 
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
+    /* Secondary - Warm cream/sand */
+    --secondary: 45 30% 94%;
+    --secondary-foreground: 160 30% 15%;
 
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
+    /* Muted - Light sage */
+    --muted: 150 15% 93%;
+    --muted-foreground: 160 10% 45%;
 
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
+    /* Accent - Brighter golf green */
+    --accent: 152 50% 38%;
+    --accent-foreground: 60 20% 98%;
 
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
 
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 222.2 84% 4.9%;
+    --border: 150 15% 88%;
+    --input: 150 15% 88%;
+    --ring: 152 45% 28%;
 
     --radius: 0.5rem;
 
+    /* Custom golf tokens */
+    --golf-green: 152 45% 28%;
+    --golf-green-light: 152 40% 42%;
+    --golf-fairway: 145 35% 45%;
+    --golf-cream: 45 30% 96%;
+    --golf-sand: 38 35% 88%;
+    --golf-dark: 160 30% 10%;
+    
+    /* Success/Status colors */
+    --success: 152 50% 35%;
+    --success-foreground: 0 0% 100%;
+    --warning: 38 92% 50%;
+    --warning-foreground: 0 0% 100%;
+    --info: 199 89% 48%;
+    --info-foreground: 0 0% 100%;
+
+    /* Shadows */
+    --shadow-sm: 0 1px 2px 0 hsl(160 30% 10% / 0.05);
+    --shadow-md: 0 4px 6px -1px hsl(160 30% 10% / 0.1), 0 2px 4px -2px hsl(160 30% 10% / 0.1);
+    --shadow-lg: 0 10px 15px -3px hsl(160 30% 10% / 0.1), 0 4px 6px -4px hsl(160 30% 10% / 0.1);
+    --shadow-elegant: 0 20px 40px -12px hsl(152 45% 28% / 0.15);
+
     --sidebar-background: 0 0% 98%;
-
-    --sidebar-foreground: 240 5.3% 26.1%;
-
-    --sidebar-primary: 240 5.9% 10%;
-
-    --sidebar-primary-foreground: 0 0% 98%;
-
-    --sidebar-accent: 240 4.8% 95.9%;
-
-    --sidebar-accent-foreground: 240 5.9% 10%;
-
-    --sidebar-border: 220 13% 91%;
-
-    --sidebar-ring: 217.2 91.2% 59.8%;
+    --sidebar-foreground: 160 30% 15%;
+    --sidebar-primary: 152 45% 28%;
+    --sidebar-primary-foreground: 60 20% 98%;
+    --sidebar-accent: 150 15% 93%;
+    --sidebar-accent-foreground: 160 30% 15%;
+    --sidebar-border: 150 15% 88%;
+    --sidebar-ring: 152 45% 28%;
   }
 
   .dark {
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
+    --background: 160 25% 8%;
+    --foreground: 60 15% 95%;
 
-    --card: 222.2 84% 4.9%;
-    --card-foreground: 210 40% 98%;
+    --card: 160 20% 12%;
+    --card-foreground: 60 15% 95%;
 
-    --popover: 222.2 84% 4.9%;
-    --popover-foreground: 210 40% 98%;
+    --popover: 160 20% 12%;
+    --popover-foreground: 60 15% 95%;
 
-    --primary: 210 40% 98%;
-    --primary-foreground: 222.2 47.4% 11.2%;
+    --primary: 152 50% 45%;
+    --primary-foreground: 160 30% 8%;
 
-    --secondary: 217.2 32.6% 17.5%;
-    --secondary-foreground: 210 40% 98%;
+    --secondary: 160 15% 18%;
+    --secondary-foreground: 60 15% 92%;
 
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
+    --muted: 160 15% 18%;
+    --muted-foreground: 150 10% 55%;
 
-    --accent: 217.2 32.6% 17.5%;
-    --accent-foreground: 210 40% 98%;
+    --accent: 152 45% 38%;
+    --accent-foreground: 60 15% 95%;
 
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 210 40% 98%;
+    --destructive: 0 62% 45%;
+    --destructive-foreground: 0 0% 100%;
 
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 212.7 26.8% 83.9%;
-    --sidebar-background: 240 5.9% 10%;
-    --sidebar-foreground: 240 4.8% 95.9%;
-    --sidebar-primary: 224.3 76.3% 48%;
-    --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 240 3.7% 15.9%;
-    --sidebar-accent-foreground: 240 4.8% 95.9%;
-    --sidebar-border: 240 3.7% 15.9%;
-    --sidebar-ring: 217.2 91.2% 59.8%;
+    --border: 160 15% 20%;
+    --input: 160 15% 20%;
+    --ring: 152 50% 45%;
+
+    --golf-green: 152 50% 45%;
+    --golf-green-light: 152 45% 55%;
+    --golf-fairway: 145 40% 50%;
+    --golf-cream: 45 20% 18%;
+    --golf-sand: 38 25% 22%;
+    --golf-dark: 60 15% 95%;
+
+    --success: 152 50% 45%;
+    --success-foreground: 160 30% 8%;
+    --warning: 38 92% 55%;
+    --warning-foreground: 0 0% 0%;
+    --info: 199 89% 55%;
+    --info-foreground: 0 0% 0%;
+
+    --sidebar-background: 160 20% 10%;
+    --sidebar-foreground: 60 15% 92%;
+    --sidebar-primary: 152 50% 45%;
+    --sidebar-primary-foreground: 160 30% 8%;
+    --sidebar-accent: 160 15% 16%;
+    --sidebar-accent-foreground: 60 15% 92%;
+    --sidebar-border: 160 15% 20%;
+    --sidebar-ring: 152 50% 45%;
   }
 }
 
@@ -100,6 +135,66 @@ All colors MUST be HSL.
   }
 
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground antialiased;
+    font-family: 'Source Sans 3', system-ui, sans-serif;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: 'Playfair Display', Georgia, serif;
+    @apply font-semibold tracking-tight;
+  }
+}
+
+@layer components {
+  .golf-badge {
+    @apply inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-full;
+  }
+
+  .golf-badge-verified {
+    @apply golf-badge bg-primary/10 text-primary;
+  }
+
+  .golf-badge-spec {
+    @apply golf-badge bg-accent/10 text-accent;
+  }
+
+  .golf-card {
+    @apply bg-card rounded-lg border shadow-sm transition-all duration-200 hover:shadow-md;
+  }
+
+  .golf-card-premium {
+    @apply golf-card hover:shadow-elegant hover:-translate-y-0.5;
+  }
+
+  .golf-input {
+    @apply flex h-11 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50;
+  }
+
+  .condition-indicator {
+    @apply flex items-center gap-1;
+  }
+
+  .condition-dot {
+    @apply w-2 h-2 rounded-full;
+  }
+
+  .condition-1 { @apply bg-destructive; }
+  .condition-2 { @apply bg-warning; }
+  .condition-3 { @apply bg-info; }
+  .condition-4 { @apply bg-success/70; }
+  .condition-5 { @apply bg-success; }
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+
+  .gradient-golf {
+    background: linear-gradient(135deg, hsl(var(--primary)) 0%, hsl(var(--accent)) 100%);
+  }
+
+  .gradient-hero {
+    background: linear-gradient(180deg, hsl(var(--golf-cream)) 0%, hsl(var(--background)) 100%);
   }
 }
