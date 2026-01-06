@@ -10,16 +10,18 @@ import { Tables } from '@/integrations/supabase/types';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import { CATEGORIES, CONDITIONS, SHAFT_FLEX, SELLER_TYPES } from '@/lib/constants';
+import { PlaceBidModal } from '@/components/bids/PlaceBidModal';
+import { ListingBids } from '@/components/bids/ListingBids';
 import { 
   MapPin, 
   Clock, 
   CheckCircle2, 
   MessageSquare, 
-  Star,
   ChevronLeft,
   ChevronRight,
   Loader2,
-  Shield
+  Shield,
+  Gavel
 } from 'lucide-react';
 
 type ListingWithProfile = Tables<'listings'> & {
@@ -36,6 +38,7 @@ export default function ListingDetail() {
   const [loading, setLoading] = useState(true);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [contactLoading, setContactLoading] = useState(false);
+  const [showBidModal, setShowBidModal] = useState(false);
 
   useEffect(() => {
     if (id) {
@@ -349,19 +352,36 @@ export default function ListingDetail() {
                 </div>
 
                 {user?.id !== listing.user_id && (
-                  <Button 
-                    className="w-full" 
-                    size="lg"
-                    onClick={handleContact}
-                    disabled={contactLoading}
-                  >
-                    {contactLoading ? (
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    ) : (
-                      <MessageSquare className="h-4 w-4 mr-2" />
-                    )}
-                    Kontakta säljare
-                  </Button>
+                  <div className="space-y-3">
+                    <Button 
+                      className="w-full" 
+                      size="lg"
+                      onClick={() => {
+                        if (!user) {
+                          navigate('/auth');
+                          return;
+                        }
+                        setShowBidModal(true);
+                      }}
+                    >
+                      <Gavel className="h-4 w-4 mr-2" />
+                      Lägg bud
+                    </Button>
+                    <Button 
+                      className="w-full" 
+                      size="lg"
+                      variant="outline"
+                      onClick={handleContact}
+                      disabled={contactLoading}
+                    >
+                      {contactLoading ? (
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      ) : (
+                        <MessageSquare className="h-4 w-4 mr-2" />
+                      )}
+                      Kontakta säljare
+                    </Button>
+                  </div>
                 )}
 
                 {/* Seller Info */}
@@ -394,9 +414,26 @@ export default function ListingDetail() {
                 </div>
               </CardContent>
             </Card>
+
+            {/* Bids section - visible to seller */}
+            {user?.id === listing.user_id && (
+              <ListingBids listingId={listing.id} isSeller={true} />
+            )}
           </div>
         </div>
       </div>
+
+      {/* Bid Modal */}
+      {user && listing && (
+        <PlaceBidModal
+          isOpen={showBidModal}
+          onClose={() => setShowBidModal(false)}
+          listingId={listing.id}
+          listingTitle={`${listing.brand} ${listing.model}`}
+          askingPrice={listing.price}
+          userId={user.id}
+        />
+      )}
     </Layout>
   );
 }
