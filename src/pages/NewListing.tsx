@@ -241,7 +241,7 @@ export default function NewListing() {
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-2">
                   <Label htmlFor="category">Kategori *</Label>
-                  <Select value={formData.category} onValueChange={(v) => handleSelectChange('category', v)}>
+                  <Select value={formData.category || undefined} onValueChange={(v) => handleSelectChange('category', v)}>
                     <SelectTrigger>
                       <SelectValue placeholder="Välj kategori" />
                     </SelectTrigger>
@@ -255,7 +255,7 @@ export default function NewListing() {
 
                 <div className="space-y-2">
                   <Label htmlFor="brand">Märke *</Label>
-                  <Select value={formData.brand} onValueChange={(v) => handleSelectChange('brand', v)}>
+                  <Select value={formData.brand || undefined} onValueChange={(v) => handleSelectChange('brand', v)}>
                     <SelectTrigger>
                       <SelectValue placeholder="Välj märke" />
                     </SelectTrigger>
@@ -327,7 +327,7 @@ export default function NewListing() {
 
                 <div className="space-y-2">
                   <Label htmlFor="shaftFlex">Flex</Label>
-                  <Select value={formData.shaftFlex} onValueChange={(v) => handleSelectChange('shaftFlex', v)}>
+                  <Select value={formData.shaftFlex || undefined} onValueChange={(v) => handleSelectChange('shaftFlex', v)}>
                     <SelectTrigger>
                       <SelectValue placeholder="Välj flex" />
                     </SelectTrigger>
@@ -385,7 +385,7 @@ export default function NewListing() {
             <CardContent className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="condition">Skick *</Label>
-                <Select value={formData.condition} onValueChange={(v) => handleSelectChange('condition', v)}>
+                <Select value={formData.condition || undefined} onValueChange={(v) => handleSelectChange('condition', v)}>
                   <SelectTrigger>
                     <SelectValue placeholder="Välj skick" />
                   </SelectTrigger>
@@ -419,7 +419,7 @@ export default function NewListing() {
 
                 <div className="space-y-2">
                   <Label htmlFor="city">Ort *</Label>
-                  <Select value={formData.city} onValueChange={(v) => handleSelectChange('city', v)}>
+                  <Select value={formData.city || undefined} onValueChange={(v) => handleSelectChange('city', v)}>
                     <SelectTrigger>
                       <SelectValue placeholder="Välj ort" />
                     </SelectTrigger>
