@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -26,9 +26,56 @@ interface ListingFiltersProps {
   onFiltersChange: (filters: FilterState) => void;
 }
 
+// Debounce hook
+function useDebounce<T>(value: T, delay: number): T {
+  const [debouncedValue, setDebouncedValue] = useState<T>(value);
+
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedValue(value);
+    }, delay);
+
+    return () => {
+      clearTimeout(handler);
+    };
+  }, [value, delay]);
+
+  return debouncedValue;
+}
+
 export function ListingFilters({ filters, onFiltersChange }: ListingFiltersProps) {
   const [priceRange, setPriceRange] = useState([filters.minPrice, filters.maxPrice]);
   const [mobileOpen, setMobileOpen] = useState(false);
+  
+  // Local state for price inputs to allow typing without losing focus
+  const [localMinPrice, setLocalMinPrice] = useState(filters.minPrice.toString());
+  const [localMaxPrice, setLocalMaxPrice] = useState(filters.maxPrice.toString());
+  
+  // Debounce the local price values
+  const debouncedMinPrice = useDebounce(localMinPrice, 400);
+  const debouncedMaxPrice = useDebounce(localMaxPrice, 400);
+
+  // Update filters when debounced values change
+  useEffect(() => {
+    const minVal = Number(debouncedMinPrice) || 0;
+    const maxVal = Number(debouncedMaxPrice) || 100000;
+    
+    if (minVal !== filters.minPrice || maxVal !== filters.maxPrice) {
+      setPriceRange([minVal, maxVal]);
+      onFiltersChange({ 
+        ...filters, 
+        minPrice: minVal, 
+        maxPrice: maxVal 
+      });
+    }
+  }, [debouncedMinPrice, debouncedMaxPrice]);
+
+  // Sync local state when filters change externally (e.g., clear filters)
+  useEffect(() => {
+    setLocalMinPrice(filters.minPrice.toString());
+    setLocalMaxPrice(filters.maxPrice.toString());
+    setPriceRange([filters.minPrice, filters.maxPrice]);
+  }, [filters.minPrice, filters.maxPrice]);
 
   const updateFilter = (key: keyof FilterState, value: string | number) => {
     onFiltersChange({ ...filters, [key]: value });
@@ -45,6 +92,8 @@ export function ListingFilters({ filters, onFiltersChange }: ListingFiltersProps
       city: '',
       search: '',
     });
+    setLocalMinPrice('0');
+    setLocalMaxPrice('100000');
     setPriceRange([0, 100000]);
   };
 
@@ -134,10 +183,17 @@ export function ListingFilters({ filters, onFiltersChange }: ListingFiltersProps
         <Label>Pris (kr)</Label>
         <Slider
           value={priceRange}
-          onValueChange={setPriceRange}
+          onValueChange={(values) => {
+            setPriceRange(values);
+            setLocalMinPrice(values[0].toString());
+            setLocalMaxPrice(values[1].toString());
+          }}
           onValueCommit={(values) => {
-            updateFilter('minPrice', values[0]);
-            updateFilter('maxPrice', values[1]);
+            onFiltersChange({ 
+              ...filters, 
+              minPrice: values[0], 
+              maxPrice: values[1] 
+            });
           }}
           max={100000}
           step={500}
@@ -146,24 +202,16 @@ export function ListingFilters({ filters, onFiltersChange }: ListingFiltersProps
         <div className="flex items-center gap-2">
           <Input
             type="number"
-            value={priceRange[0]}
-            onChange={(e) => {
-              const val = Number(e.target.value);
-              setPriceRange([val, priceRange[1]]);
-              updateFilter('minPrice', val);
-            }}
+            value={localMinPrice}
+            onChange={(e) => setLocalMinPrice(e.target.value)}
             className="w-full"
             placeholder="Min"
           />
           <span className="text-muted-foreground">-</span>
           <Input
             type="number"
-            value={priceRange[1]}
-            onChange={(e) => {
-              const val = Number(e.target.value);
-              setPriceRange([priceRange[0], val]);
-              updateFilter('maxPrice', val);
-            }}
+            value={localMaxPrice}
+            onChange={(e) => setLocalMaxPrice(e.target.value)}
             className="w-full"
             placeholder="Max"
           />

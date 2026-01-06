@@ -14,6 +14,57 @@ export type Database = {
   }
   public: {
     Tables: {
+      bids: {
+        Row: {
+          amount: number
+          bidder_id: string
+          created_at: string
+          id: string
+          listing_id: string
+          message: string | null
+          parent_bid_id: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          amount: number
+          bidder_id: string
+          created_at?: string
+          id?: string
+          listing_id: string
+          message?: string | null
+          parent_bid_id?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          amount?: number
+          bidder_id?: string
+          created_at?: string
+          id?: string
+          listing_id?: string
+          message?: string | null
+          parent_bid_id?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bids_listing_id_fkey"
+            columns: ["listing_id"]
+            isOneToOne: false
+            referencedRelation: "listings"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bids_parent_bid_id_fkey"
+            columns: ["parent_bid_id"]
+            isOneToOne: false
+            referencedRelation: "bids"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       conversations: {
         Row: {
           buyer_id: string
