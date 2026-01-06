@@ -206,7 +206,7 @@ export default function Profile() {
 
               <div className="space-y-2">
                 <Label htmlFor="city">Ort</Label>
-                <Select value={formData.city} onValueChange={(v) => handleSelectChange('city', v)}>
+                <Select value={formData.city || undefined} onValueChange={(v) => handleSelectChange('city', v)}>
                   <SelectTrigger>
                     <SelectValue placeholder="Välj ort" />
                   </SelectTrigger>
