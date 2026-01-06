@@ -63,12 +63,12 @@ export function ListingFilters({ filters, onFiltersChange }: ListingFiltersProps
       {/* Category */}
       <div className="space-y-2">
         <Label>Kategori</Label>
-        <Select value={filters.category} onValueChange={(v) => updateFilter('category', v)}>
+        <Select value={filters.category || "all"} onValueChange={(v) => updateFilter('category', v === "all" ? "" : v)}>
           <SelectTrigger>
             <SelectValue placeholder="Alla kategorier" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="">Alla kategorier</SelectItem>
+            <SelectItem value="all">Alla kategorier</SelectItem>
             {CATEGORIES.map((cat) => (
               <SelectItem key={cat.value} value={cat.value}>{cat.label}</SelectItem>
             ))}
@@ -79,12 +79,12 @@ export function ListingFilters({ filters, onFiltersChange }: ListingFiltersProps
       {/* Brand */}
       <div className="space-y-2">
         <Label>Märke</Label>
-        <Select value={filters.brand} onValueChange={(v) => updateFilter('brand', v)}>
+        <Select value={filters.brand || "all"} onValueChange={(v) => updateFilter('brand', v === "all" ? "" : v)}>
           <SelectTrigger>
             <SelectValue placeholder="Alla märken" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="">Alla märken</SelectItem>
+            <SelectItem value="all">Alla märken</SelectItem>
             {POPULAR_BRANDS.map((brand) => (
               <SelectItem key={brand} value={brand}>{brand}</SelectItem>
             ))}
@@ -95,12 +95,12 @@ export function ListingFilters({ filters, onFiltersChange }: ListingFiltersProps
       {/* Shaft Flex */}
       <div className="space-y-2">
         <Label>Shaft Flex</Label>
-        <Select value={filters.shaftFlex} onValueChange={(v) => updateFilter('shaftFlex', v)}>
+        <Select value={filters.shaftFlex || "all"} onValueChange={(v) => updateFilter('shaftFlex', v === "all" ? "" : v)}>
           <SelectTrigger>
             <SelectValue placeholder="Alla flex" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="">Alla flex</SelectItem>
+            <SelectItem value="all">Alla flex</SelectItem>
             {SHAFT_FLEX.map((flex) => (
               <SelectItem key={flex.value} value={flex.value}>{flex.label}</SelectItem>
             ))}
@@ -111,12 +111,12 @@ export function ListingFilters({ filters, onFiltersChange }: ListingFiltersProps
       {/* Condition */}
       <div className="space-y-2">
         <Label>Skick</Label>
-        <Select value={filters.condition} onValueChange={(v) => updateFilter('condition', v)}>
+        <Select value={filters.condition || "all"} onValueChange={(v) => updateFilter('condition', v === "all" ? "" : v)}>
           <SelectTrigger>
             <SelectValue placeholder="Alla skick" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="">Alla skick</SelectItem>
+            <SelectItem value="all">Alla skick</SelectItem>
             {CONDITIONS.map((cond) => (
               <SelectItem key={cond.value} value={cond.value.toString()}>
                 <span className="flex items-center gap-2">
@@ -173,12 +173,12 @@ export function ListingFilters({ filters, onFiltersChange }: ListingFiltersProps
       {/* City */}
       <div className="space-y-2">
         <Label>Ort</Label>
-        <Select value={filters.city} onValueChange={(v) => updateFilter('city', v)}>
+        <Select value={filters.city || "all"} onValueChange={(v) => updateFilter('city', v === "all" ? "" : v)}>
           <SelectTrigger>
             <SelectValue placeholder="Hela Sverige" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="">Hela Sverige</SelectItem>
+            <SelectItem value="all">Hela Sverige</SelectItem>
             {SWEDISH_CITIES.map((city) => (
               <SelectItem key={city} value={city}>{city}</SelectItem>
             ))}
