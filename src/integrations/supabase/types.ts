@@ -233,6 +233,30 @@ export type Database = {
           },
         ]
       }
+      platform_config: {
+        Row: {
+          config_key: string
+          config_value: string
+          description: string | null
+          id: string
+          updated_at: string
+        }
+        Insert: {
+          config_key: string
+          config_value: string
+          description?: string | null
+          id?: string
+          updated_at?: string
+        }
+        Update: {
+          config_key?: string
+          config_value?: string
+          description?: string | null
+          id?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           avatar_url: string | null
@@ -327,15 +351,129 @@ export type Database = {
           },
         ]
       }
+      transactions: {
+        Row: {
+          amount: number
+          auto_release_at: string | null
+          bid_id: string
+          buyer_id: string
+          completed_at: string | null
+          created_at: string
+          delivered_at: string | null
+          dispute_reason: string | null
+          disputed_at: string | null
+          id: string
+          listing_id: string
+          platform_fee: number
+          seller_id: string
+          seller_payout: number
+          shipped_at: string | null
+          status: string
+          stripe_checkout_session_id: string | null
+          stripe_payment_intent_id: string | null
+          stripe_transfer_id: string | null
+          tracking_number: string | null
+          updated_at: string
+        }
+        Insert: {
+          amount: number
+          auto_release_at?: string | null
+          bid_id: string
+          buyer_id: string
+          completed_at?: string | null
+          created_at?: string
+          delivered_at?: string | null
+          dispute_reason?: string | null
+          disputed_at?: string | null
+          id?: string
+          listing_id: string
+          platform_fee?: number
+          seller_id: string
+          seller_payout?: number
+          shipped_at?: string | null
+          status?: string
+          stripe_checkout_session_id?: string | null
+          stripe_payment_intent_id?: string | null
+          stripe_transfer_id?: string | null
+          tracking_number?: string | null
+          updated_at?: string
+        }
+        Update: {
+          amount?: number
+          auto_release_at?: string | null
+          bid_id?: string
+          buyer_id?: string
+          completed_at?: string | null
+          created_at?: string
+          delivered_at?: string | null
+          dispute_reason?: string | null
+          disputed_at?: string | null
+          id?: string
+          listing_id?: string
+          platform_fee?: number
+          seller_id?: string
+          seller_payout?: number
+          shipped_at?: string | null
+          status?: string
+          stripe_checkout_session_id?: string | null
+          stripe_payment_intent_id?: string | null
+          stripe_transfer_id?: string | null
+          tracking_number?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "transactions_bid_id_fkey"
+            columns: ["bid_id"]
+            isOneToOne: false
+            referencedRelation: "bids"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "transactions_listing_id_fkey"
+            columns: ["listing_id"]
+            isOneToOne: false
+            referencedRelation: "listings"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_roles: {
+        Row: {
+          created_at: string
+          id: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      has_role: {
+        Args: {
+          _role: Database["public"]["Enums"]["app_role"]
+          _user_id: string
+        }
+        Returns: boolean
+      }
     }
     Enums: {
-      [_ in never]: never
+      app_role: "admin" | "moderator" | "user"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -462,6 +600,8 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      app_role: ["admin", "moderator", "user"],
+    },
   },
 } as const
