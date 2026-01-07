@@ -14,6 +14,8 @@ import Conversation from "./pages/Conversation";
 import Profile from "./pages/Profile";
 import MyListings from "./pages/MyListings";
 import MyBids from "./pages/MyBids";
+import MyTransactions from "./pages/MyTransactions";
+import Admin from "./pages/Admin";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -36,6 +38,8 @@ const App = () => (
             <Route path="/profile" element={<Profile />} />
             <Route path="/my-listings" element={<MyListings />} />
             <Route path="/my-bids" element={<MyBids />} />
+            <Route path="/my-transactions" element={<MyTransactions />} />
+            <Route path="/admin" element={<Admin />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>

@@ -1,7 +1,7 @@
 import { Link, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/hooks/useAuth';
-import { Menu, X, Plus, MessageSquare, User, LogOut, Gavel } from 'lucide-react';
+import { Menu, X, Plus, MessageSquare, User, LogOut, Gavel, ShoppingBag } from 'lucide-react';
 import { useState } from 'react';
 import {
   DropdownMenu,
@@ -83,6 +83,12 @@ export function Header() {
                     <Link to="/my-bids">
                       <Gavel className="h-4 w-4 mr-2" />
                       Mina bud
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <Link to="/my-transactions">
+                      <ShoppingBag className="h-4 w-4 mr-2" />
+                      Mina affärer
                     </Link>
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
@@ -172,6 +178,12 @@ export function Header() {
                     <Link to="/my-bids" onClick={() => setMobileMenuOpen(false)}>
                       <Gavel className="h-4 w-4 mr-2" />
                       Mina bud
+                    </Link>
+                  </Button>
+                  <Button variant="ghost" asChild className="justify-start">
+                    <Link to="/my-transactions" onClick={() => setMobileMenuOpen(false)}>
+                      <ShoppingBag className="h-4 w-4 mr-2" />
+                      Mina affärer
                     </Link>
                   </Button>
                   <Button 
