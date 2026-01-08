@@ -3,6 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { supabase } from '@/integrations/supabase/client';
 import { Tables } from '@/integrations/supabase/types';
+import { useAuth } from '@/hooks/useAuth';
 import { BidCard } from './BidCard';
 import { Loader2, Gavel } from 'lucide-react';
 
@@ -16,6 +17,7 @@ interface ListingBidsProps {
 }
 
 export function ListingBids({ listingId, isSeller }: ListingBidsProps) {
+  const { user } = useAuth();
   const [bids, setBids] = useState<BidWithProfile[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -114,7 +116,7 @@ export function ListingBids({ listingId, isSeller }: ListingBidsProps) {
       </CardHeader>
       <CardContent className="space-y-4">
         {pendingBids.map((bid) => (
-          <BidCard key={bid.id} bid={bid} isSeller={isSeller} onUpdate={fetchBids} />
+          <BidCard key={bid.id} bid={bid} isSeller={isSeller} currentUserId={user?.id} onUpdate={fetchBids} />
         ))}
         {otherBids.length > 0 && pendingBids.length > 0 && (
           <div className="border-t pt-4 mt-4">
@@ -122,7 +124,7 @@ export function ListingBids({ listingId, isSeller }: ListingBidsProps) {
           </div>
         )}
         {otherBids.map((bid) => (
-          <BidCard key={bid.id} bid={bid} isSeller={isSeller} onUpdate={fetchBids} />
+          <BidCard key={bid.id} bid={bid} isSeller={isSeller} currentUserId={user?.id} onUpdate={fetchBids} />
         ))}
       </CardContent>
     </Card>
