@@ -47,8 +47,8 @@ serve(async (req) => {
     }
     logStep("Received bid_id", { bid_id });
 
-    // Fetch bid with listing details
-    const { data: bid, error: bidError } = await supabaseClient
+    // Fetch bid with listing details (use admin client to bypass RLS)
+    const { data: bid, error: bidError } = await supabaseAdmin
       .from('bids')
       .select('*, listings(*)')
       .eq('id', bid_id)
