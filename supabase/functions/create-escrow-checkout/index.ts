@@ -63,6 +63,13 @@ serve(async (req) => {
     if (bid.bidder_id !== user.id) {
       throw new Error("Only the bidder can pay for this bid");
     }
+
+    // Stripe requires minimum 3 SEK for SEK transactions
+    const MINIMUM_AMOUNT_SEK = 3;
+    if (bid.amount < MINIMUM_AMOUNT_SEK) {
+      throw new Error(`Minsta belopp för betalning är ${MINIMUM_AMOUNT_SEK} kr`);
+    }
+
     logStep("Bid verified", { amount: bid.amount, listing: bid.listings?.title });
 
     // Get platform config
