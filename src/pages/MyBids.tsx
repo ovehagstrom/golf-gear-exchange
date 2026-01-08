@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { Layout } from '@/components/layout/Layout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -8,7 +8,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { supabase } from '@/integrations/supabase/client';
 import { Tables } from '@/integrations/supabase/types';
 import { useAuth } from '@/hooks/useAuth';
-import { Loader2, Gavel, Package, ArrowRight } from 'lucide-react';
+import { useToast } from '@/hooks/use-toast';
+import { Loader2, Gavel, Package, ArrowRight, CreditCard, Shield, CheckCircle } from 'lucide-react';
 
 type BidWithListing = Tables<'bids'> & {
   listings: Tables<'listings'> | null;
@@ -24,9 +25,21 @@ const statusLabels: Record<string, { label: string; variant: 'default' | 'second
 
 export default function MyBids() {
   const { user } = useAuth();
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const { toast } = useToast();
   const [sentBids, setSentBids] = useState<BidWithListing[]>([]);
   const [receivedBids, setReceivedBids] = useState<(BidWithListing & { profiles?: Tables<'profiles'> | null })[]>([]);
   const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (searchParams.get('cancelled') === 'true') {
+      toast({
+        title: 'Betalning avbruten',
+        description: 'Du kan betala senare från dina bud.',
+      });
+    }
+  }, [searchParams]);
 
   useEffect(() => {
     if (user) {
@@ -139,8 +152,9 @@ export default function MyBids() {
             ) : (
               sentBids.map((bid) => {
                 const status = statusLabels[bid.status] || statusLabels.pending;
+                const isAccepted = bid.status === 'accepted';
                 return (
-                  <Card key={bid.id}>
+                  <Card key={bid.id} className={isAccepted ? 'border-primary/50 bg-primary/5' : ''}>
                     <CardContent className="p-4">
                       <div className="flex items-center gap-4">
                         {bid.listings?.images?.[0] && (
@@ -166,6 +180,29 @@ export default function MyBids() {
                       </div>
                       {bid.message && (
                         <p className="mt-2 text-sm text-muted-foreground italic">"{bid.message}"</p>
+                      )}
+                      
+                      {/* Payment CTA for accepted bids */}
+                      {isAccepted && (
+                        <div className="mt-4 p-4 rounded-lg bg-background border border-primary/30">
+                          <div className="flex items-start gap-3 mb-3">
+                            <CheckCircle className="h-5 w-5 text-primary flex-shrink-0" />
+                            <div>
+                              <p className="font-medium">Grattis! Ditt bud har accepterats</p>
+                              <p className="text-sm text-muted-foreground">
+                                Slutför köpet genom att betala. Pengarna hålls tryggt tills du bekräftar mottagandet.
+                              </p>
+                            </div>
+                          </div>
+                          <Button 
+                            onClick={() => navigate(`/checkout/${bid.id}`)}
+                            className="w-full"
+                            size="lg"
+                          >
+                            <CreditCard className="h-4 w-4 mr-2" />
+                            Betala och slutför affären
+                          </Button>
+                        </div>
                       )}
                     </CardContent>
                   </Card>

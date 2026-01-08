@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -8,7 +9,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Tables } from '@/integrations/supabase/types';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
-import { Check, X, ArrowRightLeft, Loader2 } from 'lucide-react';
+import { Check, X, ArrowRightLeft, Loader2, CreditCard, Shield } from 'lucide-react';
 
 type BidWithProfile = Tables<'bids'> & {
   profiles?: Tables<'profiles'> | null;
@@ -17,6 +18,7 @@ type BidWithProfile = Tables<'bids'> & {
 interface BidCardProps {
   bid: BidWithProfile;
   isSeller: boolean;
+  currentUserId?: string;
   onUpdate: () => void;
 }
 
@@ -28,12 +30,15 @@ const statusLabels: Record<string, { label: string; variant: 'default' | 'second
   cancelled: { label: 'Avbrutet', variant: 'destructive' },
 };
 
-export function BidCard({ bid, isSeller, onUpdate }: BidCardProps) {
+export function BidCard({ bid, isSeller, currentUserId, onUpdate }: BidCardProps) {
+  const navigate = useNavigate();
   const [showCounter, setShowCounter] = useState(false);
   const [counterAmount, setCounterAmount] = useState('');
   const [counterMessage, setCounterMessage] = useState('');
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
+  
+  const isBidder = currentUserId === bid.bidder_id;
 
   const formatPrice = (price: number) => {
     return new Intl.NumberFormat('sv-SE', {
@@ -198,8 +203,30 @@ export function BidCard({ bid, isSeller, onUpdate }: BidCardProps) {
           </div>
         )}
 
+        {/* Buyer: Pay for accepted bid - this is the crucial CTA */}
+        {isBidder && bid.status === 'accepted' && (
+          <div className="mt-4 space-y-3">
+            <div className="p-3 bg-primary/10 border border-primary/20 rounded-lg">
+              <div className="flex items-start gap-2 mb-3">
+                <Shield className="h-5 w-5 text-primary flex-shrink-0 mt-0.5" />
+                <p className="text-sm">
+                  Ditt bud har accepterats! Betala säkert - pengarna hålls av plattformen tills du bekräftar mottagandet.
+                </p>
+              </div>
+              <Button 
+                onClick={() => navigate(`/checkout/${bid.id}`)} 
+                className="w-full"
+                size="lg"
+              >
+                <CreditCard className="h-4 w-4 mr-2" />
+                Betala och slutför affären
+              </Button>
+            </div>
+          </div>
+        )}
+
         {/* Buyer actions for counter-bids */}
-        {!isSeller && bid.status === 'pending' && bid.parent_bid_id && (
+        {isBidder && bid.status === 'pending' && bid.parent_bid_id && (
           <div className="mt-4 flex gap-2">
             <Button size="sm" onClick={handleAccept} disabled={loading} className="flex-1">
               <Check className="h-4 w-4 mr-1" />

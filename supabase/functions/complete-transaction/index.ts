@@ -40,7 +40,8 @@ serve(async (req) => {
     const user = userData.user;
     logStep("User authenticated", { userId: user.id });
 
-    const { transaction_id, action } = await req.json();
+    const body = await req.json();
+    const { transaction_id, action, tracking_number, reason } = body;
     
     if (!transaction_id || !action) {
       throw new Error("transaction_id and action are required");
@@ -69,8 +70,6 @@ serve(async (req) => {
         if (transaction.status !== 'paid') {
           throw new Error("Can only mark as shipped when status is paid");
         }
-
-        const { tracking_number } = await req.json();
         
         await supabaseAdmin
           .from('transactions')
@@ -122,8 +121,7 @@ serve(async (req) => {
           throw new Error("Only the buyer can report a problem");
         }
 
-        const body = await req.json();
-        const dispute_reason = body.reason || 'Problem reported by buyer';
+        const dispute_reason = reason || 'Problem reported by buyer';
 
         await supabaseAdmin
           .from('transactions')
