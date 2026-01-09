@@ -16,6 +16,7 @@ import MyListings from "./pages/MyListings";
 import MyBids from "./pages/MyBids";
 import MyTransactions from "./pages/MyTransactions";
 import Checkout from "./pages/Checkout";
+import PaymentSuccess from "./pages/PaymentSuccess";
 import Admin from "./pages/Admin";
 import NotFound from "./pages/NotFound";
 
@@ -41,6 +42,7 @@ const App = () => (
             <Route path="/my-bids" element={<MyBids />} />
             <Route path="/my-transactions" element={<MyTransactions />} />
             <Route path="/checkout/:bidId" element={<Checkout />} />
+            <Route path="/payment-success" element={<PaymentSuccess />} />
             <Route path="/admin" element={<Admin />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
