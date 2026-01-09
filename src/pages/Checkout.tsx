@@ -97,7 +97,11 @@ export default function Checkout() {
       if (error) throw error;
       
       if (data?.url) {
-        window.location.href = data.url;
+        window.open(data.url, '_blank');
+        toast({
+          title: 'Betalning påbörjad',
+          description: 'En ny flik har öppnats för att slutföra betalningen.',
+        });
       }
     } catch (error) {
       toast({ 
