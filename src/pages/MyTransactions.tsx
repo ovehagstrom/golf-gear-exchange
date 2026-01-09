@@ -25,32 +25,15 @@ export default function MyTransactions() {
   const [sales, setSales] = useState<TransactionWithDetails[]>([]);
   const [loading, setLoading] = useState(true);
 
+  // Payment verification is now handled by webhook - just show success message if redirected
   useEffect(() => {
-    const verifyPayment = async () => {
-      const sessionId = searchParams.get('session_id');
-      if (sessionId && searchParams.get('success') === 'true') {
-        try {
-          const { data, error } = await supabase.functions.invoke('verify-payment', {
-            body: { session_id: sessionId },
-          });
-          
-          if (error) throw error;
-          
-          if (data?.success) {
-            toast({
-              title: '🎉 Betalning genomförd!',
-              description: 'Pengarna är nu säkrade. Säljaren har blivit notifierad.',
-            });
-            fetchTransactions();
-          }
-        } catch (error) {
-          console.error('Failed to verify payment:', error);
-        }
-      }
-    };
-    
-    verifyPayment();
-  }, [searchParams]);
+    if (searchParams.get('success') === 'true') {
+      toast({
+        title: '🎉 Betalning genomförd!',
+        description: 'Pengarna är nu säkrade. Säljaren har blivit notifierad.',
+      });
+    }
+  }, [searchParams, toast]);
 
   useEffect(() => {
     if (user) {

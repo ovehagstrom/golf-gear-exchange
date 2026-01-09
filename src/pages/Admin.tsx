@@ -21,12 +21,25 @@ import {
   RefreshCw,
   CheckCircle,
   XCircle,
+  Webhook,
+  Clock,
 } from 'lucide-react';
 
 type TransactionWithDetails = Tables<'transactions'> & {
   listings?: Tables<'listings'> | null;
   buyer_profile?: Tables<'profiles'> | null;
   seller_profile?: Tables<'profiles'> | null;
+};
+
+type WebhookEvent = {
+  id: string;
+  stripe_event_id: string;
+  event_type: string;
+  payload: Record<string, unknown>;
+  processed: boolean;
+  error_message: string | null;
+  transaction_id: string | null;
+  created_at: string;
 };
 
 export default function Admin() {
@@ -36,6 +49,7 @@ export default function Admin() {
   const [loading, setLoading] = useState(true);
   const [transactions, setTransactions] = useState<TransactionWithDetails[]>([]);
   const [disputes, setDisputes] = useState<TransactionWithDetails[]>([]);
+  const [webhookEvents, setWebhookEvents] = useState<WebhookEvent[]>([]);
   const [config, setConfig] = useState<Record<string, string>>({});
   const [actionLoading, setActionLoading] = useState<string | null>(null);
 
@@ -75,6 +89,13 @@ export default function Admin() {
       .from('platform_config')
       .select('*');
 
+    // Fetch webhook events (admin only)
+    const { data: webhookData } = await supabase
+      .from('webhook_events')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(100);
+
     // Enrich transactions
     const enriched = await Promise.all(
       (txData || []).map(async (tx) => {
@@ -88,6 +109,7 @@ export default function Admin() {
 
     setTransactions(enriched);
     setDisputes(enriched.filter(t => t.status === 'disputed'));
+    setWebhookEvents((webhookData || []) as WebhookEvent[]);
     
     const configMap: Record<string, string> = {};
     configData?.forEach(c => {
@@ -242,6 +264,10 @@ export default function Admin() {
               <DollarSign className="h-4 w-4" />
               Alla transaktioner
             </TabsTrigger>
+            <TabsTrigger value="webhooks" className="flex items-center gap-2">
+              <Webhook className="h-4 w-4" />
+              Webhook-logg
+            </TabsTrigger>
             <TabsTrigger value="settings" className="flex items-center gap-2">
               <Settings className="h-4 w-4" />
               Inställningar
@@ -353,6 +379,63 @@ export default function Admin() {
                 </Card>
               );
             })}
+          </TabsContent>
+
+          <TabsContent value="webhooks" className="space-y-4">
+            <div className="flex justify-between items-center">
+              <p className="text-sm text-muted-foreground">Senaste 100 webhook-events från Stripe</p>
+              <Button variant="outline" size="sm" onClick={fetchAllData}>
+                <RefreshCw className="h-4 w-4 mr-2" />
+                Uppdatera
+              </Button>
+            </div>
+            {webhookEvents.length === 0 ? (
+              <Card>
+                <CardContent className="py-12 text-center">
+                  <Webhook className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+                  <p className="text-muted-foreground">Inga webhook-events ännu</p>
+                </CardContent>
+              </Card>
+            ) : (
+              <div className="space-y-2">
+                {webhookEvents.map((event) => (
+                  <Card key={event.id} className={!event.processed && event.error_message ? 'border-destructive' : ''}>
+                    <CardContent className="p-4">
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-1">
+                            {event.processed ? (
+                              <CheckCircle className="h-4 w-4 text-green-500 flex-shrink-0" />
+                            ) : event.error_message ? (
+                              <XCircle className="h-4 w-4 text-destructive flex-shrink-0" />
+                            ) : (
+                              <Clock className="h-4 w-4 text-yellow-500 flex-shrink-0" />
+                            )}
+                            <Badge variant={
+                              event.event_type.includes('completed') ? 'default' :
+                              event.event_type.includes('failed') ? 'destructive' :
+                              event.event_type.includes('refund') ? 'secondary' :
+                              event.event_type.includes('dispute') ? 'destructive' : 'outline'
+                            }>
+                              {event.event_type}
+                            </Badge>
+                          </div>
+                          <p className="text-xs text-muted-foreground truncate">
+                            {event.stripe_event_id}
+                          </p>
+                          {event.error_message && (
+                            <p className="text-sm text-destructive mt-1">{event.error_message}</p>
+                          )}
+                        </div>
+                        <div className="text-right text-xs text-muted-foreground flex-shrink-0">
+                          {formatDate(event.created_at)}
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            )}
           </TabsContent>
 
           <TabsContent value="settings">
