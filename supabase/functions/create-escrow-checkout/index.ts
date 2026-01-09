@@ -137,7 +137,7 @@ serve(async (req) => {
         listing_id: bid.listing_id,
         type: 'escrow_payment',
       },
-      success_url: `${req.headers.get("origin")}/my-transactions?success=true&bid=${bid_id}`,
+      success_url: `${req.headers.get("origin")}/my-transactions?success=true&session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${req.headers.get("origin")}/my-bids?cancelled=true`,
     });
     logStep("Checkout session created", { sessionId: session.id, url: session.url });
