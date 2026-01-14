@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -9,7 +9,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Tables } from '@/integrations/supabase/types';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
-import { Check, X, ArrowRightLeft, Loader2, CreditCard, Shield } from 'lucide-react';
+import { Check, X, ArrowRightLeft, Loader2, CreditCard, Shield, CheckCircle, Package } from 'lucide-react';
 
 type BidWithProfile = Tables<'bids'> & {
   profiles?: Tables<'profiles'> | null;
@@ -36,9 +36,52 @@ export function BidCard({ bid, isSeller, currentUserId, onUpdate }: BidCardProps
   const [counterAmount, setCounterAmount] = useState('');
   const [counterMessage, setCounterMessage] = useState('');
   const [loading, setLoading] = useState(false);
+  const [transactionStatus, setTransactionStatus] = useState<string | null>(null);
   const { toast } = useToast();
   
   const isBidder = currentUserId === bid.bidder_id;
+
+  // Check if there's a transaction for this bid
+  useEffect(() => {
+    const checkTransaction = async () => {
+      if (bid.status === 'accepted') {
+        const { data } = await supabase
+          .from('transactions')
+          .select('status')
+          .eq('bid_id', bid.id)
+          .maybeSingle();
+        
+        if (data) {
+          setTransactionStatus(data.status);
+        }
+      }
+    };
+
+    checkTransaction();
+
+    // Subscribe to transaction changes for this bid
+    const channel = supabase
+      .channel(`transaction-${bid.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'transactions',
+          filter: `bid_id=eq.${bid.id}`,
+        },
+        (payload) => {
+          if (payload.new && 'status' in payload.new) {
+            setTransactionStatus(payload.new.status as string);
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [bid.id, bid.status]);
 
   const formatPrice = (price: number) => {
     return new Intl.NumberFormat('sv-SE', {
@@ -203,23 +246,85 @@ export function BidCard({ bid, isSeller, currentUserId, onUpdate }: BidCardProps
           </div>
         )}
 
-        {/* Buyer: Pay for accepted bid - this is the crucial CTA */}
+        {/* Buyer: Show payment status or pay button */}
         {isBidder && bid.status === 'accepted' && (
           <div className="mt-4 space-y-3">
-            <div className="p-3 bg-primary/10 border border-primary/20 rounded-lg">
-              <div className="flex items-start gap-2 mb-3">
-                <Shield className="h-5 w-5 text-primary flex-shrink-0 mt-0.5" />
-                <p className="text-sm">
-                  Ditt bud har accepterats! Betala säkert - pengarna hålls av plattformen tills du bekräftar mottagandet.
-                </p>
+            {transactionStatus && transactionStatus !== 'pending_payment' ? (
+              // Transaction exists and is paid or further
+              <div className="p-3 bg-green-50 border border-green-200 rounded-lg">
+                <div className="flex items-center gap-2">
+                  <CheckCircle className="h-5 w-5 text-green-600 flex-shrink-0" />
+                  <div>
+                    <p className="font-medium text-green-800">
+                      {transactionStatus === 'paid' && 'Betald – väntar på leverans'}
+                      {transactionStatus === 'shipped' && 'Skickad – på väg till dig'}
+                      {transactionStatus === 'delivered' && 'Levererad'}
+                      {transactionStatus === 'completed' && 'Affären är slutförd'}
+                      {transactionStatus === 'disputed' && 'Tvist pågår'}
+                      {transactionStatus === 'refunded' && 'Återbetald'}
+                      {transactionStatus === 'cancelled' && 'Avbruten'}
+                    </p>
+                    <p className="text-sm text-green-700">
+                      {transactionStatus === 'paid' && 'Säljaren förbereder din leverans.'}
+                      {transactionStatus === 'shipped' && 'Du kommer att kunna bekräfta mottagandet när varan anländer.'}
+                      {transactionStatus === 'completed' && 'Tack för ditt köp!'}
+                    </p>
+                  </div>
+                </div>
+                <Button 
+                  onClick={() => navigate('/my-transactions')} 
+                  variant="outline"
+                  className="w-full mt-3"
+                  size="sm"
+                >
+                  <Package className="h-4 w-4 mr-2" />
+                  Se transaktionsdetaljer
+                </Button>
+              </div>
+            ) : (
+              // No transaction or pending payment - show pay button
+              <div className="p-3 bg-primary/10 border border-primary/20 rounded-lg">
+                <div className="flex items-start gap-2 mb-3">
+                  <Shield className="h-5 w-5 text-primary flex-shrink-0 mt-0.5" />
+                  <p className="text-sm">
+                    Ditt bud har accepterats! Betala säkert - pengarna hålls av plattformen tills du bekräftar mottagandet.
+                  </p>
+                </div>
+                <Button 
+                  onClick={() => navigate(`/checkout/${bid.id}`)} 
+                  className="w-full"
+                  size="lg"
+                >
+                  <CreditCard className="h-4 w-4 mr-2" />
+                  Betala och slutför affären
+                </Button>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Seller: Show transaction status for accepted bids */}
+        {isSeller && bid.status === 'accepted' && transactionStatus && transactionStatus !== 'pending_payment' && (
+          <div className="mt-4">
+            <div className="p-3 bg-green-50 border border-green-200 rounded-lg">
+              <div className="flex items-center gap-2">
+                <CheckCircle className="h-5 w-5 text-green-600 flex-shrink-0" />
+                <div>
+                  <p className="font-medium text-green-800">
+                    {transactionStatus === 'paid' && 'Betald – skicka varan nu!'}
+                    {transactionStatus === 'shipped' && 'Skickad – väntar på köparens bekräftelse'}
+                    {transactionStatus === 'completed' && 'Affären är slutförd'}
+                  </p>
+                </div>
               </div>
               <Button 
-                onClick={() => navigate(`/checkout/${bid.id}`)} 
-                className="w-full"
-                size="lg"
+                onClick={() => navigate('/my-transactions')} 
+                variant="outline"
+                className="w-full mt-3"
+                size="sm"
               >
-                <CreditCard className="h-4 w-4 mr-2" />
-                Betala och slutför affären
+                <Package className="h-4 w-4 mr-2" />
+                Hantera leverans
               </Button>
             </div>
           </div>
