@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { Layout } from '@/components/layout/Layout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -9,10 +9,15 @@ import { supabase } from '@/integrations/supabase/client';
 import { Tables } from '@/integrations/supabase/types';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Gavel, Package, ArrowRight, CreditCard, Shield, CheckCircle } from 'lucide-react';
+import { Loader2, Gavel, Package, ArrowRight, CreditCard, Shield, CheckCircle, Clock, Truck } from 'lucide-react';
+import { getStatusInfo } from '@/lib/transactionStatus';
 
 type BidWithListing = Tables<'bids'> & {
   listings: Tables<'listings'> | null;
+};
+
+type BidWithTransaction = BidWithListing & {
+  transaction?: Tables<'transactions'> | null;
 };
 
 const statusLabels: Record<string, { label: string; variant: 'default' | 'secondary' | 'destructive' | 'outline' }> = {
@@ -28,26 +33,11 @@ export default function MyBids() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { toast } = useToast();
-  const [sentBids, setSentBids] = useState<BidWithListing[]>([]);
+  const [sentBids, setSentBids] = useState<BidWithTransaction[]>([]);
   const [receivedBids, setReceivedBids] = useState<(BidWithListing & { profiles?: Tables<'profiles'> | null })[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    if (searchParams.get('cancelled') === 'true') {
-      toast({
-        title: 'Betalning avbruten',
-        description: 'Du kan betala senare från dina bud.',
-      });
-    }
-  }, [searchParams]);
-
-  useEffect(() => {
-    if (user) {
-      fetchBids();
-    }
-  }, [user]);
-
-  const fetchBids = async () => {
+  const fetchBids = useCallback(async () => {
     if (!user) return;
 
     // Fetch bids I've sent
@@ -56,6 +46,23 @@ export default function MyBids() {
       .select('*, listings(*)')
       .eq('bidder_id', user.id)
       .order('created_at', { ascending: false });
+
+    // For accepted bids, fetch their transaction status
+    const sentWithTransactions: BidWithTransaction[] = [];
+    if (sent) {
+      for (const bid of sent) {
+        if (bid.status === 'accepted') {
+          const { data: transaction } = await supabase
+            .from('transactions')
+            .select('*')
+            .eq('bid_id', bid.id)
+            .maybeSingle();
+          sentWithTransactions.push({ ...bid, transaction });
+        } else {
+          sentWithTransactions.push({ ...bid, transaction: null });
+        }
+      }
+    }
 
     // Fetch bids on my listings
     const { data: myListings } = await supabase
@@ -74,9 +81,54 @@ export default function MyBids() {
       setReceivedBids((received as any) || []);
     }
 
-    setSentBids(sent || []);
+    setSentBids(sentWithTransactions);
     setLoading(false);
-  };
+  }, [user]);
+
+  useEffect(() => {
+    if (searchParams.get('cancelled') === 'true') {
+      toast({
+        title: 'Betalning avbruten',
+        description: 'Du kan betala senare från dina bud.',
+      });
+    }
+    // If returning from payment success, refetch to get updated status
+    if (searchParams.get('success') === 'true') {
+      fetchBids();
+    }
+  }, [searchParams, toast, fetchBids]);
+
+  useEffect(() => {
+    if (user) {
+      fetchBids();
+    }
+  }, [user, fetchBids]);
+
+  // Real-time subscription for transaction updates
+  useEffect(() => {
+    if (!user) return;
+
+    const channel = supabase
+      .channel('my-bids-transactions')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'transactions',
+          filter: `buyer_id=eq.${user.id}`,
+        },
+        () => {
+          // Refetch when transaction changes
+          fetchBids();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user, fetchBids]);
 
   const formatPrice = (price: number) => {
     return new Intl.NumberFormat('sv-SE', {
@@ -93,6 +145,124 @@ export default function MyBids() {
       hour: '2-digit',
       minute: '2-digit',
     });
+  };
+
+  const renderTransactionStatus = (bid: BidWithTransaction) => {
+    const transaction = bid.transaction;
+    
+    // No transaction yet - show payment button
+    if (!transaction || transaction.status === 'pending_payment') {
+      return (
+        <div className="mt-4 p-4 rounded-lg bg-background border border-primary/30">
+          <div className="flex items-start gap-3 mb-3">
+            <CheckCircle className="h-5 w-5 text-primary flex-shrink-0" />
+            <div>
+              <p className="font-medium">Grattis! Ditt bud har accepterats</p>
+              <p className="text-sm text-muted-foreground">
+                Slutför köpet genom att betala. Pengarna hålls tryggt tills du bekräftar mottagandet.
+              </p>
+            </div>
+          </div>
+          <Button 
+            onClick={() => navigate(`/checkout/${bid.id}`)}
+            className="w-full"
+            size="lg"
+          >
+            <CreditCard className="h-4 w-4 mr-2" />
+            Betala och slutför affären
+          </Button>
+        </div>
+      );
+    }
+
+    // Transaction exists and is paid or beyond
+    const statusInfo = getStatusInfo(transaction.status);
+    
+    if (transaction.status === 'paid') {
+      return (
+        <div className="mt-4 p-4 rounded-lg bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800">
+          <div className="flex items-start gap-3">
+            <Shield className="h-5 w-5 text-blue-600 dark:text-blue-400 flex-shrink-0" />
+            <div>
+              <p className="font-medium text-blue-800 dark:text-blue-200">Pengarna är säkrade</p>
+              <p className="text-sm text-blue-600 dark:text-blue-400">
+                {statusInfo.description}
+              </p>
+            </div>
+          </div>
+          <Button 
+            variant="outline"
+            onClick={() => navigate('/my-transactions')}
+            className="w-full mt-3"
+            size="sm"
+          >
+            Visa affärsdetaljer
+          </Button>
+        </div>
+      );
+    }
+
+    if (transaction.status === 'shipped') {
+      return (
+        <div className="mt-4 p-4 rounded-lg bg-purple-50 dark:bg-purple-950/30 border border-purple-200 dark:border-purple-800">
+          <div className="flex items-start gap-3">
+            <Truck className="h-5 w-5 text-purple-600 dark:text-purple-400 flex-shrink-0" />
+            <div>
+              <p className="font-medium text-purple-800 dark:text-purple-200">Varan är skickad!</p>
+              <p className="text-sm text-purple-600 dark:text-purple-400">
+                {statusInfo.description}
+              </p>
+            </div>
+          </div>
+          <Button 
+            onClick={() => navigate('/my-transactions')}
+            className="w-full mt-3"
+            size="sm"
+          >
+            Bekräfta mottagande
+          </Button>
+        </div>
+      );
+    }
+
+    if (transaction.status === 'completed' || transaction.status === 'delivered') {
+      return (
+        <div className="mt-4 p-4 rounded-lg bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800">
+          <div className="flex items-start gap-3">
+            <CheckCircle className="h-5 w-5 text-green-600 dark:text-green-400 flex-shrink-0" />
+            <div>
+              <p className="font-medium text-green-800 dark:text-green-200">Affären är slutförd</p>
+              <p className="text-sm text-green-600 dark:text-green-400">
+                {statusInfo.description}
+              </p>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // Default fallback for other statuses
+    return (
+      <div className="mt-4 p-4 rounded-lg bg-muted border">
+        <div className="flex items-start gap-3">
+          <Clock className="h-5 w-5 text-muted-foreground flex-shrink-0" />
+          <div>
+            <p className="font-medium">{statusInfo.label}</p>
+            <p className="text-sm text-muted-foreground">
+              {statusInfo.description}
+            </p>
+          </div>
+        </div>
+        <Button 
+          variant="outline"
+          onClick={() => navigate('/my-transactions')}
+          className="w-full mt-3"
+          size="sm"
+        >
+          Visa affärsdetaljer
+        </Button>
+      </div>
+    );
   };
 
   if (!user) {
@@ -182,28 +352,8 @@ export default function MyBids() {
                         <p className="mt-2 text-sm text-muted-foreground italic">"{bid.message}"</p>
                       )}
                       
-                      {/* Payment CTA for accepted bids */}
-                      {isAccepted && (
-                        <div className="mt-4 p-4 rounded-lg bg-background border border-primary/30">
-                          <div className="flex items-start gap-3 mb-3">
-                            <CheckCircle className="h-5 w-5 text-primary flex-shrink-0" />
-                            <div>
-                              <p className="font-medium">Grattis! Ditt bud har accepterats</p>
-                              <p className="text-sm text-muted-foreground">
-                                Slutför köpet genom att betala. Pengarna hålls tryggt tills du bekräftar mottagandet.
-                              </p>
-                            </div>
-                          </div>
-                          <Button 
-                            onClick={() => navigate(`/checkout/${bid.id}`)}
-                            className="w-full"
-                            size="lg"
-                          >
-                            <CreditCard className="h-4 w-4 mr-2" />
-                            Betala och slutför affären
-                          </Button>
-                        </div>
-                      )}
+                      {/* Transaction status for accepted bids */}
+                      {isAccepted && renderTransactionStatus(bid)}
                     </CardContent>
                   </Card>
                 );
