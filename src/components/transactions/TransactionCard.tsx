@@ -159,13 +159,28 @@ export function TransactionCard({ transaction, userRole, onUpdate }: Transaction
           </div>
 
           {/* Status description */}
-          <div className="mt-4 p-3 bg-muted rounded-lg">
-            <p className="text-sm">
+          <div className={`mt-4 p-3 rounded-lg ${
+            transaction.status === 'paid' ? 'bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800' :
+            transaction.status === 'shipped' ? 'bg-purple-50 dark:bg-purple-950/30 border border-purple-200 dark:border-purple-800' :
+            transaction.status === 'completed' ? 'bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800' :
+            'bg-muted'
+          }`}>
+            <p className={`text-sm font-medium ${
+              transaction.status === 'paid' ? 'text-blue-800 dark:text-blue-200' :
+              transaction.status === 'shipped' ? 'text-purple-800 dark:text-purple-200' :
+              transaction.status === 'completed' ? 'text-green-800 dark:text-green-200' :
+              ''
+            }`}>
               {userRole === 'buyer' ? statusInfo.description : statusInfo.sellerInfo}
             </p>
-            {transaction.auto_release_at && ['shipped', 'paid'].includes(transaction.status) && (
-              <p className="text-xs text-muted-foreground mt-1">
-                Automatisk payout: {formatDate(transaction.auto_release_at)}
+            {transaction.auto_release_at && transaction.status === 'shipped' && (
+              <p className="text-xs text-muted-foreground mt-2">
+                ⏰ Auto-slutförs: {formatDate(transaction.auto_release_at)}
+              </p>
+            )}
+            {transaction.tracking_number && transaction.status === 'shipped' && (
+              <p className="text-xs mt-2">
+                📦 Spårningsnummer: <span className="font-mono">{transaction.tracking_number}</span>
               </p>
             )}
           </div>

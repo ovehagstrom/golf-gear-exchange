@@ -71,16 +71,32 @@ serve(async (req) => {
           throw new Error("Can only mark as shipped when status is paid");
         }
         
+        // Set auto-release to 5 days from now
+        const autoReleaseAt = new Date();
+        autoReleaseAt.setDate(autoReleaseAt.getDate() + 5);
+        
         await supabaseAdmin
           .from('transactions')
           .update({
             status: 'shipped',
             shipped_at: new Date().toISOString(),
             tracking_number: tracking_number || null,
+            auto_release_at: autoReleaseAt.toISOString(),
           })
           .eq('id', transaction_id);
 
-        logStep("Marked as shipped");
+        // Create notification for buyer
+        await supabaseAdmin
+          .from('notifications')
+          .insert({
+            user_id: transaction.buyer_id,
+            title: 'Varan har skickats!',
+            message: `Säljaren har skickat din vara${tracking_number ? `. Spårningsnummer: ${tracking_number}` : ''}. Bekräfta mottagandet inom 5 dagar.`,
+            type: 'info',
+            related_transaction_id: transaction_id,
+          });
+
+        logStep("Marked as shipped", { auto_release_at: autoReleaseAt.toISOString() });
         break;
       }
 
@@ -93,13 +109,14 @@ serve(async (req) => {
           throw new Error("Invalid transaction status for delivery confirmation");
         }
 
-        // Update transaction to delivered and trigger payout
+        // Update transaction to completed
         await supabaseAdmin
           .from('transactions')
           .update({
             status: 'completed',
             delivered_at: new Date().toISOString(),
             completed_at: new Date().toISOString(),
+            auto_release_at: null, // Clear auto-release since manually confirmed
           })
           .eq('id', transaction_id);
 
@@ -109,8 +126,20 @@ serve(async (req) => {
           .update({ status: 'sold' })
           .eq('id', transaction.listing_id);
 
-        // Note: In production, you'd trigger a payout via Stripe Connect here
-        // For MVP without Connect, funds remain in platform Stripe account
+        // Update seller's completed deals count
+        await supabaseAdmin.rpc('increment_completed_deals', { seller_id: transaction.seller_id });
+
+        // Create notification for seller
+        await supabaseAdmin
+          .from('notifications')
+          .insert({
+            user_id: transaction.seller_id,
+            title: 'Affären är slutförd!',
+            message: `Köparen har bekräftat mottagandet. Pengarna är på väg till dig!`,
+            type: 'success',
+            related_transaction_id: transaction_id,
+          });
+
         logStep("Transaction completed, delivery confirmed");
         break;
       }
