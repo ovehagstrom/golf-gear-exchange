@@ -40,29 +40,34 @@ export default function MyBids() {
   const fetchBids = useCallback(async () => {
     if (!user) return;
 
-    // Fetch bids I've sent
+    setLoading(true);
+
+    // Fetch bids I've sent with their listings
     const { data: sent } = await supabase
       .from('bids')
       .select('*, listings(*)')
       .eq('bidder_id', user.id)
       .order('created_at', { ascending: false });
 
-    // For accepted bids, fetch their transaction status
-    const sentWithTransactions: BidWithTransaction[] = [];
-    if (sent) {
-      for (const bid of sent) {
-        if (bid.status === 'accepted') {
-          const { data: transaction } = await supabase
-            .from('transactions')
-            .select('*')
-            .eq('bid_id', bid.id)
-            .maybeSingle();
-          sentWithTransactions.push({ ...bid, transaction });
-        } else {
-          sentWithTransactions.push({ ...bid, transaction: null });
-        }
+    // Fetch ALL transactions for this user as buyer in a single query
+    const { data: transactions } = await supabase
+      .from('transactions')
+      .select('*')
+      .eq('buyer_id', user.id);
+
+    // Create a map of bid_id -> transaction for fast lookup
+    const transactionMap = new Map<string, Tables<'transactions'>>();
+    if (transactions) {
+      for (const tx of transactions) {
+        transactionMap.set(tx.bid_id, tx);
       }
     }
+
+    // Combine bids with their transactions
+    const sentWithTransactions: BidWithTransaction[] = (sent || []).map(bid => ({
+      ...bid,
+      transaction: transactionMap.get(bid.id) || null,
+    }));
 
     // Fetch bids on my listings
     const { data: myListings } = await supabase
@@ -79,6 +84,8 @@ export default function MyBids() {
         .order('created_at', { ascending: false });
 
       setReceivedBids((received as any) || []);
+    } else {
+      setReceivedBids([]);
     }
 
     setSentBids(sentWithTransactions);
@@ -94,7 +101,15 @@ export default function MyBids() {
     }
     // If returning from payment success, refetch to get updated status
     if (searchParams.get('success') === 'true') {
-      fetchBids();
+      toast({
+        title: 'Betalning genomförd!',
+        description: 'Pengarna är säkrade. Väntar på att säljaren skickar varan.',
+      });
+      // Small delay to allow database to update
+      const timer = setTimeout(() => {
+        fetchBids();
+      }, 500);
+      return () => clearTimeout(timer);
     }
   }, [searchParams, toast, fetchBids]);
 
