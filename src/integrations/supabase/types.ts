@@ -553,6 +553,10 @@ export type Database = {
         }
         Returns: boolean
       }
+      increment_completed_deals: {
+        Args: { seller_id: string }
+        Returns: undefined
+      }
     }
     Enums: {
       app_role: "admin" | "moderator" | "user"
