@@ -45,9 +45,10 @@ export function Footer() {
           <div>
             <h3 className="font-semibold mb-4">Information</h3>
             <ul className="space-y-2 text-sm text-muted-foreground">
-              <li><Link to="/about" className="hover:text-foreground">Om oss</Link></li>
-              <li><Link to="/terms" className="hover:text-foreground">Villkor</Link></li>
+              <li><Link to="/terms" className="hover:text-foreground">Användarvillkor</Link></li>
               <li><Link to="/privacy" className="hover:text-foreground">Integritetspolicy</Link></li>
+              <li><Link to="/cookies" className="hover:text-foreground">Cookies</Link></li>
+              <li><Link to="/disclaimer" className="hover:text-foreground">Ansvarsfriskrivning</Link></li>
             </ul>
           </div>
         </div>

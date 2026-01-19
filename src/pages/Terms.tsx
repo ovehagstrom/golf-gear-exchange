@@ -1,0 +1,95 @@
+import { Layout } from '@/components/layout/Layout';
+
+export default function Terms() {
+  return (
+    <Layout>
+      <div className="container py-12 max-w-4xl">
+        <h1 className="text-3xl font-display font-bold mb-8">Användarvillkor</h1>
+        
+        <div className="prose prose-lg max-w-none space-y-8">
+          <p className="text-muted-foreground">
+            Senast uppdaterad: {new Date().toLocaleDateString('sv-SE')}
+          </p>
+
+          <section>
+            <h2 className="text-xl font-semibold mb-4">1. Allmänna villkor</h2>
+            <p className="text-muted-foreground">
+              Genom att använda GolfMarket ("Tjänsten") accepterar du dessa användarvillkor. 
+              Tjänsten tillhandahålls av GolfMarket och är en marknadsplats för köp och försäljning 
+              av begagnad golfutrustning mellan privatpersoner och företag.
+            </p>
+          </section>
+
+          <section>
+            <h2 className="text-xl font-semibold mb-4">2. Registrering och konto</h2>
+            <p className="text-muted-foreground">
+              För att använda Tjänsten måste du skapa ett konto med korrekta uppgifter. 
+              Du är ansvarig för att hålla dina inloggningsuppgifter säkra och för all 
+              aktivitet som sker via ditt konto.
+            </p>
+          </section>
+
+          <section>
+            <h2 className="text-xl font-semibold mb-4">3. Annonsering</h2>
+            <ul className="list-disc pl-6 space-y-2 text-muted-foreground">
+              <li>Annonser måste vara korrekta och sanningsenliga</li>
+              <li>Förbjudet innehåll inkluderar: piratkopior, stulna varor, vapen</li>
+              <li>GolfMarket förbehåller sig rätten att ta bort annonser som bryter mot villkoren</li>
+              <li>Du ansvarar för att dina annonser följer gällande lagar</li>
+            </ul>
+          </section>
+
+          <section>
+            <h2 className="text-xl font-semibold mb-4">4. Betalning och escrow</h2>
+            <p className="text-muted-foreground">
+              Betalningar hanteras via Stripe. Pengarna hålls i escrow (deponering) tills köparen 
+              bekräftar mottagande av varan eller tills automatisk frigörning sker efter 5 dagar 
+              från att säljaren markerat varan som skickad.
+            </p>
+          </section>
+
+          <section>
+            <h2 className="text-xl font-semibold mb-4">5. Plattformsavgift</h2>
+            <p className="text-muted-foreground">
+              GolfMarket tar en plattformsavgift på genomförda transaktioner. Aktuell avgift 
+              visas innan betalning genomförs.
+            </p>
+          </section>
+
+          <section>
+            <h2 className="text-xl font-semibold mb-4">6. Tvister</h2>
+            <p className="text-muted-foreground">
+              Vid tvist mellan köpare och säljare kan en part öppna en tvist inom 5 dagar 
+              från leverans. GolfMarket kommer att granska fallet och fatta beslut om 
+              återbetalning eller frigörning av medel.
+            </p>
+          </section>
+
+          <section>
+            <h2 className="text-xl font-semibold mb-4">7. Ansvarsbegränsning</h2>
+            <p className="text-muted-foreground">
+              GolfMarket är en marknadsplats och är inte part i transaktioner mellan köpare 
+              och säljare. Vi garanterar inte kvaliteten på varor eller uppfyllande av avtal 
+              mellan användare.
+            </p>
+          </section>
+
+          <section>
+            <h2 className="text-xl font-semibold mb-4">8. Ändringar</h2>
+            <p className="text-muted-foreground">
+              Vi förbehåller oss rätten att ändra dessa villkor. Väsentliga ändringar 
+              meddelas via e-post eller i Tjänsten.
+            </p>
+          </section>
+
+          <section>
+            <h2 className="text-xl font-semibold mb-4">9. Kontakt</h2>
+            <p className="text-muted-foreground">
+              Vid frågor om dessa villkor, kontakta oss via support@golfmarket.se.
+            </p>
+          </section>
+        </div>
+      </div>
+    </Layout>
+  );
+}

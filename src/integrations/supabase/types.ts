@@ -340,6 +340,51 @@ export type Database = {
         }
         Relationships: []
       }
+      reports: {
+        Row: {
+          admin_notes: string | null
+          created_at: string
+          details: string | null
+          id: string
+          reason: string
+          report_type: string
+          reporter_id: string
+          status: string
+          target_conversation_id: string | null
+          target_listing_id: string | null
+          target_user_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          admin_notes?: string | null
+          created_at?: string
+          details?: string | null
+          id?: string
+          reason: string
+          report_type: string
+          reporter_id: string
+          status?: string
+          target_conversation_id?: string | null
+          target_listing_id?: string | null
+          target_user_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          admin_notes?: string | null
+          created_at?: string
+          details?: string | null
+          id?: string
+          reason?: string
+          report_type?: string
+          reporter_id?: string
+          status?: string
+          target_conversation_id?: string | null
+          target_listing_id?: string | null
+          target_user_id?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       reviews: {
         Row: {
           comment: string | null
@@ -478,6 +523,27 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      user_blocks: {
+        Row: {
+          blocked_id: string
+          blocker_id: string
+          created_at: string
+          id: string
+        }
+        Insert: {
+          blocked_id: string
+          blocker_id: string
+          created_at?: string
+          id?: string
+        }
+        Update: {
+          blocked_id?: string
+          blocker_id?: string
+          created_at?: string
+          id?: string
+        }
+        Relationships: []
       }
       user_roles: {
         Row: {
