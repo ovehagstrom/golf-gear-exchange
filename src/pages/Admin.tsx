@@ -12,6 +12,8 @@ import { Tables } from '@/integrations/supabase/types';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import { getStatusInfo } from '@/lib/transactionStatus';
+import { ProductionChecklist } from '@/components/admin/ProductionChecklist';
+import { ReportsModeration } from '@/components/admin/ReportsModeration';
 import { 
   Loader2, 
   Shield, 
@@ -23,6 +25,8 @@ import {
   XCircle,
   Webhook,
   Clock,
+  Flag,
+  Rocket,
 } from 'lucide-react';
 
 type TransactionWithDetails = Tables<'transactions'> & {
@@ -254,25 +258,41 @@ export default function Admin() {
           </Card>
         </div>
 
-        <Tabs defaultValue="disputes" className="space-y-6">
-          <TabsList>
+        <Tabs defaultValue="checklist" className="space-y-6">
+          <TabsList className="flex-wrap">
+            <TabsTrigger value="checklist" className="flex items-center gap-2">
+              <Rocket className="h-4 w-4" />
+              Checklista
+            </TabsTrigger>
+            <TabsTrigger value="reports" className="flex items-center gap-2">
+              <Flag className="h-4 w-4" />
+              Rapporter
+            </TabsTrigger>
             <TabsTrigger value="disputes" className="flex items-center gap-2">
               <AlertTriangle className="h-4 w-4" />
               Tvister ({disputes.length})
             </TabsTrigger>
             <TabsTrigger value="transactions" className="flex items-center gap-2">
               <DollarSign className="h-4 w-4" />
-              Alla transaktioner
+              Transaktioner
             </TabsTrigger>
             <TabsTrigger value="webhooks" className="flex items-center gap-2">
               <Webhook className="h-4 w-4" />
-              Webhook-logg
+              Webhooks
             </TabsTrigger>
             <TabsTrigger value="settings" className="flex items-center gap-2">
               <Settings className="h-4 w-4" />
               Inställningar
             </TabsTrigger>
           </TabsList>
+
+          <TabsContent value="checklist">
+            <ProductionChecklist />
+          </TabsContent>
+
+          <TabsContent value="reports">
+            <ReportsModeration />
+          </TabsContent>
 
           <TabsContent value="disputes" className="space-y-4">
             {disputes.length === 0 ? (

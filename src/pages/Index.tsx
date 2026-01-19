@@ -2,7 +2,7 @@ import { Link } from 'react-router-dom';
 import { Layout } from '@/components/layout/Layout';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/hooks/useAuth';
-import { ArrowRight, Shield, Search, MessageSquare, CheckCircle2 } from 'lucide-react';
+import { ArrowRight, Shield, Search, MessageSquare, CheckCircle2, CreditCard, Lock, Clock } from 'lucide-react';
 
 export default function Index() {
   const { user } = useAuth();
@@ -28,6 +28,19 @@ export default function Index() {
       title: 'Kvalitetsfokus',
       description: 'Ingen loppiskänsla - endast seriös golfutrustning.',
     },
+  ];
+
+  const trustBadges = [
+    { icon: CreditCard, title: 'Stripe Escrow', desc: 'Pengarna säkras tills du fått varan' },
+    { icon: Lock, title: 'Säker betalning', desc: 'Krypterad betalning via Stripe' },
+    { icon: Clock, title: 'Auto-frigörning', desc: '5 dagars skydd efter leverans' },
+  ];
+
+  const howItWorks = [
+    { step: '1', title: 'Hitta din klubba', desc: 'Sök bland tusentals annonser med golf-specifika filter.' },
+    { step: '2', title: 'Lägg ett bud', desc: 'Förhandla pris direkt med säljaren via budsystem.' },
+    { step: '3', title: 'Betala tryggt', desc: 'Pengarna hålls i escrow tills du bekräftat leverans.' },
+    { step: '4', title: 'Ta emot varan', desc: 'När du är nöjd frigörs pengarna till säljaren.' },
   ];
 
   const categories = [
@@ -124,6 +137,41 @@ export default function Index() {
         </div>
       </section>
 
+      {/* How it Works */}
+      <section className="container py-16">
+        <h2 className="text-2xl md:text-3xl font-display font-bold text-center mb-10">
+          Så funkar det
+        </h2>
+        <div className="grid md:grid-cols-4 gap-6">
+          {howItWorks.map((item) => (
+            <div key={item.step} className="text-center space-y-3">
+              <div className="mx-auto w-12 h-12 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-xl font-bold">
+                {item.step}
+              </div>
+              <h3 className="font-semibold">{item.title}</h3>
+              <p className="text-sm text-muted-foreground">{item.desc}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* Trust Badges */}
+      <section className="container py-16">
+        <div className="grid md:grid-cols-3 gap-6">
+          {trustBadges.map((badge) => (
+            <div key={badge.title} className="golf-card p-6 flex items-start gap-4">
+              <div className="p-3 rounded-lg bg-primary/10">
+                <badge.icon className="h-6 w-6 text-primary" />
+              </div>
+              <div>
+                <h3 className="font-semibold">{badge.title}</h3>
+                <p className="text-sm text-muted-foreground">{badge.desc}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+
       {/* CTA Section */}
       <section className="container py-20">
         <div className="golf-card-premium p-8 md:p-12 text-center gradient-golf">
@@ -131,7 +179,7 @@ export default function Index() {
             Redo att sälja?
           </h2>
           <p className="text-primary-foreground/80 mb-8 max-w-xl mx-auto">
-            Skapa en annons på under 5 minuter. Gratis att använda.
+            Skapa en annons på under 5 minuter. Gratis att använda, du betalar endast vid genomförd affär.
           </p>
           <Button size="lg" variant="secondary" asChild>
             <Link to={user ? '/listings/new' : '/auth?mode=signup'}>

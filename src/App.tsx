@@ -19,6 +19,10 @@ import Checkout from "./pages/Checkout";
 import PaymentSuccess from "./pages/PaymentSuccess";
 import Admin from "./pages/Admin";
 import NotFound from "./pages/NotFound";
+import Terms from "./pages/Terms";
+import Privacy from "./pages/Privacy";
+import Cookies from "./pages/Cookies";
+import Disclaimer from "./pages/Disclaimer";
 
 const queryClient = new QueryClient();
 
@@ -44,6 +48,10 @@ const App = () => (
             <Route path="/checkout/:bidId" element={<Checkout />} />
             <Route path="/payment-success" element={<PaymentSuccess />} />
             <Route path="/admin" element={<Admin />} />
+            <Route path="/terms" element={<Terms />} />
+            <Route path="/privacy" element={<Privacy />} />
+            <Route path="/cookies" element={<Cookies />} />
+            <Route path="/disclaimer" element={<Disclaimer />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>
