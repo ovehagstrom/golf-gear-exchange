@@ -12,6 +12,8 @@ import { useToast } from '@/hooks/use-toast';
 import { CATEGORIES, CONDITIONS, SHAFT_FLEX, SELLER_TYPES } from '@/lib/constants';
 import { PlaceBidModal } from '@/components/bids/PlaceBidModal';
 import { ListingBids } from '@/components/bids/ListingBids';
+import { ReportModal } from '@/components/moderation/ReportModal';
+import { UserActionsMenu } from '@/components/moderation/UserActionsMenu';
 import { 
   MapPin, 
   Clock, 
@@ -21,7 +23,8 @@ import {
   ChevronRight,
   Loader2,
   Shield,
-  Gavel
+  Gavel,
+  Flag
 } from 'lucide-react';
 
 type ListingWithProfile = Tables<'listings'> & {
@@ -392,7 +395,7 @@ export default function ListingDetail() {
                         {listing.profiles?.full_name?.charAt(0) || 'S'}
                       </AvatarFallback>
                     </Avatar>
-                    <div>
+                    <div className="flex-1">
                       <p className="font-medium">{listing.profiles?.full_name || 'Säljare'}</p>
                       <div className="flex items-center gap-2 text-sm text-muted-foreground">
                         {sellerType && <span>{sellerType.label}</span>}
@@ -404,6 +407,12 @@ export default function ListingDetail() {
                         )}
                       </div>
                     </div>
+                    {user && user.id !== listing.user_id && (
+                      <UserActionsMenu 
+                        userId={listing.user_id} 
+                        userName={listing.profiles?.full_name || undefined}
+                      />
+                    )}
                   </div>
 
                   {listing.profiles && (
@@ -412,6 +421,23 @@ export default function ListingDetail() {
                     </div>
                   )}
                 </div>
+
+                {/* Report listing */}
+                {user && user.id !== listing.user_id && (
+                  <div className="border-t pt-4">
+                    <ReportModal
+                      type="listing"
+                      targetId={listing.id}
+                      targetName={`${listing.brand} ${listing.model}`}
+                      trigger={
+                        <Button variant="ghost" size="sm" className="w-full text-muted-foreground">
+                          <Flag className="h-4 w-4 mr-2" />
+                          Rapportera annons
+                        </Button>
+                      }
+                    />
+                  </div>
+                )}
               </CardContent>
             </Card>
 
