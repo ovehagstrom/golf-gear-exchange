@@ -8,7 +8,9 @@ import { Card } from '@/components/ui/card';
 import { supabase } from '@/integrations/supabase/client';
 import { Tables } from '@/integrations/supabase/types';
 import { useAuth } from '@/hooks/useAuth';
-import { Loader2, Send, ArrowLeft } from 'lucide-react';
+import { ReportModal } from '@/components/moderation/ReportModal';
+import { UserActionsMenu } from '@/components/moderation/UserActionsMenu';
+import { Loader2, Send, ArrowLeft, Flag } from 'lucide-react';
 
 type ConversationWithDetails = Tables<'conversations'> & {
   listings: Tables<'listings'> | null;
@@ -200,8 +202,26 @@ export default function Conversation() {
               </Link>
             )}
           </div>
+          
+          <div className="flex items-center gap-1">
+            <ReportModal
+              type="conversation"
+              targetId={id!}
+              targetName={`Chatt med ${otherUser?.full_name || 'användare'}`}
+              trigger={
+                <Button variant="ghost" size="icon" className="h-8 w-8">
+                  <Flag className="h-4 w-4" />
+                </Button>
+              }
+            />
+            {otherUser && (
+              <UserActionsMenu 
+                userId={otherUser.id} 
+                userName={otherUser.full_name || undefined}
+              />
+            )}
+          </div>
         </div>
-
         {/* Messages */}
         <div className="flex-1 overflow-y-auto py-4 space-y-4">
           {messages.map((message, i) => {
