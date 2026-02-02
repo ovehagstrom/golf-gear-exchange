@@ -8,6 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { useToast } from '@/hooks/use-toast';
 import { z } from 'zod';
 import { Loader2, ArrowLeft } from 'lucide-react';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Link } from 'react-router-dom';
 
 const loginSchema = z.object({
@@ -18,6 +19,9 @@ const loginSchema = z.object({
 const signupSchema = loginSchema.extend({
   fullName: z.string().min(2, 'Namn måste vara minst 2 tecken'),
   confirmPassword: z.string(),
+  acceptTerms: z.literal(true, {
+    errorMap: () => ({ message: 'Du måste acceptera användarvillkoren' }),
+  }),
 }).refine((data) => data.password === data.confirmPassword, {
   message: 'Lösenorden matchar inte',
   path: ['confirmPassword'],
@@ -32,6 +36,7 @@ export default function Auth() {
     password: '',
     confirmPassword: '',
     fullName: '',
+    acceptTerms: false,
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
 
@@ -236,6 +241,35 @@ export default function Auth() {
                   />
                   {errors.confirmPassword && (
                     <p className="text-sm text-destructive">{errors.confirmPassword}</p>
+                  )}
+                </div>
+              )}
+
+              {isSignup && (
+                <div className="space-y-2">
+                  <div className="flex items-start space-x-2">
+                    <Checkbox
+                      id="acceptTerms"
+                      checked={formData.acceptTerms}
+                      onCheckedChange={(checked) => 
+                        setFormData((prev) => ({ ...prev, acceptTerms: checked === true }))
+                      }
+                      disabled={loading}
+                      className="mt-0.5"
+                    />
+                    <Label htmlFor="acceptTerms" className="text-sm font-normal leading-relaxed cursor-pointer">
+                      Jag har läst och godkänner{' '}
+                      <Link to="/terms" className="text-primary hover:underline" target="_blank">
+                        användarvillkoren
+                      </Link>{' '}
+                      och{' '}
+                      <Link to="/privacy" className="text-primary hover:underline" target="_blank">
+                        integritetspolicyn
+                      </Link>
+                    </Label>
+                  </div>
+                  {errors.acceptTerms && (
+                    <p className="text-sm text-destructive">{errors.acceptTerms}</p>
                   )}
                 </div>
               )}
