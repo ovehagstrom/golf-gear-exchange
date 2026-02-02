@@ -10,9 +10,10 @@ import { Tables } from '@/integrations/supabase/types';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { Check, X, ArrowRightLeft, Loader2, CreditCard, Shield, CheckCircle, Package } from 'lucide-react';
+import { PublicProfile } from '@/lib/types';
 
 type BidWithProfile = Tables<'bids'> & {
-  profiles?: Tables<'profiles'> | null;
+  profiles?: PublicProfile | null;
 };
 
 interface BidCardProps {

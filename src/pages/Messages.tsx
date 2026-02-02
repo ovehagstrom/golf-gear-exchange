@@ -7,11 +7,12 @@ import { supabase } from '@/integrations/supabase/client';
 import { Tables } from '@/integrations/supabase/types';
 import { useAuth } from '@/hooks/useAuth';
 import { Loader2, MessageSquare } from 'lucide-react';
+import { PublicProfile } from '@/lib/types';
 
 type ConversationWithDetails = Tables<'conversations'> & {
   listings: Tables<'listings'> | null;
-  buyer: Tables<'profiles'> | null;
-  seller: Tables<'profiles'> | null;
+  buyer: PublicProfile | null;
+  seller: PublicProfile | null;
   lastMessage?: Tables<'messages'> | null;
 };
 
@@ -37,8 +38,8 @@ export default function Messages() {
       .select(`
         *,
         listings(*),
-        buyer:profiles!conversations_buyer_id_fkey(*),
-        seller:profiles!conversations_seller_id_fkey(*)
+        buyer:profiles_public!conversations_buyer_id_fkey(*),
+        seller:profiles_public!conversations_seller_id_fkey(*)
       `)
       .or(`buyer_id.eq.${user.id},seller_id.eq.${user.id}`)
       .order('updated_at', { ascending: false });

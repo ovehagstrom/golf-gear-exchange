@@ -28,13 +28,19 @@ const statusLabels: Record<string, { label: string; variant: 'default' | 'second
   cancelled: { label: 'Avbrutet', variant: 'destructive' },
 };
 
+// Public profile for bidder display
+type BidderProfile = {
+  full_name: string | null;
+  avatar_url: string | null;
+};
+
 export default function MyBids() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { toast } = useToast();
   const [sentBids, setSentBids] = useState<BidWithTransaction[]>([]);
-  const [receivedBids, setReceivedBids] = useState<(BidWithListing & { profiles?: Tables<'profiles'> | null })[]>([]);
+  const [receivedBids, setReceivedBids] = useState<(BidWithListing & { profiles?: BidderProfile | null })[]>([]);
   const [loading, setLoading] = useState(true);
 
   const fetchBids = useCallback(async () => {
@@ -77,15 +83,32 @@ export default function MyBids() {
 
     if (myListings && myListings.length > 0) {
       const listingIds = myListings.map(l => l.id);
+      // Use profiles_public view to get bidder info without exposing email/phone
       const { data: received } = await supabase
         .from('bids')
-        .select('*, listings(*), profiles:bidder_id(full_name, avatar_url)')
+        .select('*, listings(*)')
         .in('listing_id', listingIds)
         .order('created_at', { ascending: false });
+      
+      // Fetch public profiles for bidders
+      if (received && received.length > 0) {
+        const bidderIds = [...new Set(received.map(b => b.bidder_id))];
+        const { data: profiles } = await supabase
+          .from('profiles_public')
+          .select('id, full_name, avatar_url')
+          .in('id', bidderIds);
+        
+        const profileMap = new Map(profiles?.map(p => [p.id, { full_name: p.full_name, avatar_url: p.avatar_url }]) || []);
+        const receivedWithProfiles = received.map(bid => ({
+          ...bid,
+          profiles: profileMap.get(bid.bidder_id) || null,
+        }));
+        setReceivedBids(receivedWithProfiles);
+      } else {
+        setReceivedBids([]);
+      }
 
       setReceivedBids((received as any) || []);
-    } else {
-      setReceivedBids([]);
     }
 
     setSentBids(sentWithTransactions);

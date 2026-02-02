@@ -14,6 +14,7 @@ import { PlaceBidModal } from '@/components/bids/PlaceBidModal';
 import { ListingBids } from '@/components/bids/ListingBids';
 import { ReportModal } from '@/components/moderation/ReportModal';
 import { UserActionsMenu } from '@/components/moderation/UserActionsMenu';
+import { PublicProfile } from '@/lib/types';
 import { 
   MapPin, 
   Clock, 
@@ -28,7 +29,7 @@ import {
 } from 'lucide-react';
 
 type ListingWithProfile = Tables<'listings'> & {
-  profiles: Tables<'profiles'> | null;
+  profiles: PublicProfile | null;
 };
 
 export default function ListingDetail() {
@@ -52,7 +53,7 @@ export default function ListingDetail() {
   const fetchListing = async () => {
     const { data, error } = await supabase
       .from('listings')
-      .select('*, profiles(*)')
+      .select('*, profiles:profiles_public(*)')
       .eq('id', id)
       .single();
 
