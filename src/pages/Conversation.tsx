@@ -11,15 +11,16 @@ import { useAuth } from '@/hooks/useAuth';
 import { ReportModal } from '@/components/moderation/ReportModal';
 import { UserActionsMenu } from '@/components/moderation/UserActionsMenu';
 import { Loader2, Send, ArrowLeft, Flag } from 'lucide-react';
+import { PublicProfile } from '@/lib/types';
 
 type ConversationWithDetails = Tables<'conversations'> & {
   listings: Tables<'listings'> | null;
-  buyer: Tables<'profiles'> | null;
-  seller: Tables<'profiles'> | null;
+  buyer: PublicProfile | null;
+  seller: PublicProfile | null;
 };
 
 type MessageWithSender = Tables<'messages'> & {
-  profiles: Tables<'profiles'> | null;
+  profiles: PublicProfile | null;
 };
 
 export default function Conversation() {
@@ -55,8 +56,8 @@ export default function Conversation() {
       .select(`
         *,
         listings(*),
-        buyer:profiles!conversations_buyer_id_fkey(*),
-        seller:profiles!conversations_seller_id_fkey(*)
+        buyer:profiles_public!conversations_buyer_id_fkey(*),
+        seller:profiles_public!conversations_seller_id_fkey(*)
       `)
       .eq('id', id)
       .single();
@@ -71,7 +72,7 @@ export default function Conversation() {
   const fetchMessages = async () => {
     const { data, error } = await supabase
       .from('messages')
-      .select('*, profiles(*)')
+      .select('*, profiles:profiles_public(*)')
       .eq('conversation_id', id)
       .order('created_at', { ascending: true });
 
@@ -98,7 +99,7 @@ export default function Conversation() {
           // Fetch the complete message with profile
           const { data } = await supabase
             .from('messages')
-            .select('*, profiles(*)')
+            .select('*, profiles:profiles_public(*)')
             .eq('id', payload.new.id)
             .single();
           

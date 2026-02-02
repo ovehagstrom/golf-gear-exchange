@@ -6,9 +6,10 @@ import { Tables } from '@/integrations/supabase/types';
 import { useAuth } from '@/hooks/useAuth';
 import { BidCard } from './BidCard';
 import { Loader2, Gavel } from 'lucide-react';
+import { PublicProfile } from '@/lib/types';
 
 type BidWithProfile = Tables<'bids'> & {
-  profiles?: Tables<'profiles'> | null;
+  profiles?: PublicProfile | null;
 };
 
 interface ListingBidsProps {
@@ -54,10 +55,10 @@ export function ListingBids({ listingId, isSeller }: ListingBidsProps) {
       .order('created_at', { ascending: false });
 
     if (!error && data) {
-      // Fetch profiles for each bidder
+      // Fetch public profiles for each bidder (excludes email/phone for privacy)
       const bidderIds = [...new Set(data.map(b => b.bidder_id))];
       const { data: profiles } = await supabase
-        .from('profiles')
+        .from('profiles_public')
         .select('*')
         .in('id', bidderIds);
 

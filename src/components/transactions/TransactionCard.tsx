@@ -9,6 +9,7 @@ import { Tables } from '@/integrations/supabase/types';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { getStatusInfo } from '@/lib/transactionStatus';
+import { PublicProfile } from '@/lib/types';
 import { 
   Package, 
   Truck, 
@@ -22,8 +23,8 @@ import {
 
 type TransactionWithDetails = Tables<'transactions'> & {
   listings?: Tables<'listings'> | null;
-  buyer_profile?: Tables<'profiles'> | null;
-  seller_profile?: Tables<'profiles'> | null;
+  buyer_profile?: PublicProfile | null;
+  seller_profile?: PublicProfile | null;
 };
 
 interface TransactionCardProps {

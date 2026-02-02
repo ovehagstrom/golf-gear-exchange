@@ -10,11 +10,12 @@ import { Tables } from '@/integrations/supabase/types';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2, ShoppingBag, Store, CheckCircle } from 'lucide-react';
+import { PublicProfile } from '@/lib/types';
 
 type TransactionWithDetails = Tables<'transactions'> & {
   listings?: Tables<'listings'> | null;
-  buyer_profile?: Tables<'profiles'> | null;
-  seller_profile?: Tables<'profiles'> | null;
+  buyer_profile?: PublicProfile | null;
+  seller_profile?: PublicProfile | null;
 };
 
 export default function MyTransactions() {
@@ -87,11 +88,11 @@ export default function MyTransactions() {
       .eq('seller_id', user.id)
       .order('created_at', { ascending: false });
 
-    // Enrich with profiles
+    // Enrich with public profiles (excludes email/phone for privacy)
     const enrichedPurchases = await Promise.all(
       (purchasesData || []).map(async (tx) => {
         const { data: sellerProfile } = await supabase
-          .from('profiles')
+          .from('profiles_public')
           .select('*')
           .eq('id', tx.seller_id)
           .single();
@@ -102,7 +103,7 @@ export default function MyTransactions() {
     const enrichedSales = await Promise.all(
       (salesData || []).map(async (tx) => {
         const { data: buyerProfile } = await supabase
-          .from('profiles')
+          .from('profiles_public')
           .select('*')
           .eq('id', tx.buyer_id)
           .single();

@@ -14,6 +14,7 @@ import { useToast } from '@/hooks/use-toast';
 import { getStatusInfo } from '@/lib/transactionStatus';
 import { ProductionChecklist } from '@/components/admin/ProductionChecklist';
 import { ReportsModeration } from '@/components/admin/ReportsModeration';
+import { PublicProfile } from '@/lib/types';
 import { 
   Loader2, 
   Shield, 
@@ -31,8 +32,8 @@ import {
 
 type TransactionWithDetails = Tables<'transactions'> & {
   listings?: Tables<'listings'> | null;
-  buyer_profile?: Tables<'profiles'> | null;
-  seller_profile?: Tables<'profiles'> | null;
+  buyer_profile?: PublicProfile | null;
+  seller_profile?: PublicProfile | null;
 };
 
 type WebhookEvent = {
@@ -100,12 +101,12 @@ export default function Admin() {
       .order('created_at', { ascending: false })
       .limit(100);
 
-    // Enrich transactions
+    // Enrich transactions with public profile data
     const enriched = await Promise.all(
       (txData || []).map(async (tx) => {
         const [{ data: buyerProfile }, { data: sellerProfile }] = await Promise.all([
-          supabase.from('profiles').select('*').eq('id', tx.buyer_id).single(),
-          supabase.from('profiles').select('*').eq('id', tx.seller_id).single(),
+          supabase.from('profiles_public').select('*').eq('id', tx.buyer_id).single(),
+          supabase.from('profiles_public').select('*').eq('id', tx.seller_id).single(),
         ]);
         return { ...tx, buyer_profile: buyerProfile, seller_profile: sellerProfile };
       })
@@ -319,8 +320,8 @@ export default function Admin() {
                         </p>
                         <p className="text-lg font-bold">{formatPrice(tx.amount)}</p>
                         <div className="text-sm text-muted-foreground mt-2">
-                          <p>Köpare: {tx.buyer_profile?.full_name || tx.buyer_profile?.email}</p>
-                          <p>Säljare: {tx.seller_profile?.full_name || tx.seller_profile?.email}</p>
+                          <p>Köpare: {tx.buyer_profile?.full_name || 'Okänd'}</p>
+                          <p>Säljare: {tx.seller_profile?.full_name || 'Okänd'}</p>
                         </div>
                         {tx.dispute_reason && (
                           <div className="mt-3 p-3 bg-destructive/10 rounded-lg">
