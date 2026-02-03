@@ -53,7 +53,7 @@ export default function ListingDetail() {
   const fetchListing = async () => {
     const { data, error } = await supabase
       .from('listings')
-      .select('*, profiles:profiles_public(*)')
+      .select('*, profiles:profiles_public!listings_user_id_fkey(*)')
       .eq('id', id)
       .single();
 
