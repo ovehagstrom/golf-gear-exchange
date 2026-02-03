@@ -686,6 +686,19 @@ export type Database = {
       }
     }
     Functions: {
+      get_public_profile: {
+        Args: { profile_id: string }
+        Returns: {
+          avatar_url: string
+          city: string
+          completed_deals: number
+          created_at: string
+          full_name: string
+          id: string
+          is_verified: boolean
+          seller_type: string
+        }[]
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
