@@ -72,7 +72,7 @@ export default function Conversation() {
   const fetchMessages = async () => {
     const { data, error } = await supabase
       .from('messages')
-      .select('*, profiles:profiles_public(*)')
+      .select('*, profiles:profiles_public!messages_sender_id_fkey(*)')
       .eq('conversation_id', id)
       .order('created_at', { ascending: true });
 
@@ -99,7 +99,7 @@ export default function Conversation() {
           // Fetch the complete message with profile
           const { data } = await supabase
             .from('messages')
-            .select('*, profiles:profiles_public(*)')
+            .select('*, profiles:profiles_public!messages_sender_id_fkey(*)')
             .eq('id', payload.new.id)
             .single();
           
