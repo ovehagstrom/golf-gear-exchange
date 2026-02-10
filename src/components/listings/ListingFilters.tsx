@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -47,66 +47,29 @@ export function ListingFilters({ filters, onFiltersChange }: ListingFiltersProps
   const [priceRange, setPriceRange] = useState([filters.minPrice, filters.maxPrice]);
   const [mobileOpen, setMobileOpen] = useState(false);
   
-  // Local state for price inputs to allow typing without triggering updates
+  // Local state for price inputs
   const [localMinPrice, setLocalMinPrice] = useState(filters.minPrice.toString());
   const [localMaxPrice, setLocalMaxPrice] = useState(filters.maxPrice.toString());
-  
-  // Track if we're currently typing to prevent external sync from overwriting
-  const isTypingRef = useRef(false);
-  const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Handle price input changes with debounce
-  const handleMinPriceChange = (value: string) => {
-    setLocalMinPrice(value);
-    isTypingRef.current = true;
-    
-    if (debounceTimerRef.current) {
-      clearTimeout(debounceTimerRef.current);
-    }
-    
-    debounceTimerRef.current = setTimeout(() => {
-      const minVal = Number(value) || 0;
-      const maxVal = Number(localMaxPrice) || 100000;
-      setPriceRange([minVal, maxVal]);
-      onFiltersChange({ ...filters, minPrice: minVal, maxPrice: maxVal });
-      isTypingRef.current = false;
-    }, 800);
+  const commitPriceFilter = () => {
+    const minVal = Number(localMinPrice) || 0;
+    const maxVal = Number(localMaxPrice) || 100000;
+    setPriceRange([minVal, maxVal]);
+    onFiltersChange({ ...filters, minPrice: minVal, maxPrice: maxVal });
   };
 
-  const handleMaxPriceChange = (value: string) => {
-    setLocalMaxPrice(value);
-    isTypingRef.current = true;
-    
-    if (debounceTimerRef.current) {
-      clearTimeout(debounceTimerRef.current);
+  const handlePriceKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      commitPriceFilter();
     }
-    
-    debounceTimerRef.current = setTimeout(() => {
-      const minVal = Number(localMinPrice) || 0;
-      const maxVal = Number(value) || 100000;
-      setPriceRange([minVal, maxVal]);
-      onFiltersChange({ ...filters, minPrice: minVal, maxPrice: maxVal });
-      isTypingRef.current = false;
-    }, 800);
   };
 
-  // Sync local state when filters change externally (e.g., clear filters) - but not while typing
+  // Sync local state when filters change externally (e.g., clear filters)
   useEffect(() => {
-    if (!isTypingRef.current) {
-      setLocalMinPrice(filters.minPrice.toString());
-      setLocalMaxPrice(filters.maxPrice.toString());
-      setPriceRange([filters.minPrice, filters.maxPrice]);
-    }
+    setLocalMinPrice(filters.minPrice.toString());
+    setLocalMaxPrice(filters.maxPrice.toString());
+    setPriceRange([filters.minPrice, filters.maxPrice]);
   }, [filters.minPrice, filters.maxPrice]);
-
-  // Cleanup timer on unmount
-  useEffect(() => {
-    return () => {
-      if (debounceTimerRef.current) {
-        clearTimeout(debounceTimerRef.current);
-      }
-    };
-  }, []);
 
   const updateFilter = (key: keyof FilterState, value: string | number) => {
     onFiltersChange({ ...filters, [key]: value });
@@ -234,7 +197,9 @@ export function ListingFilters({ filters, onFiltersChange }: ListingFiltersProps
           <Input
             type="number"
             value={localMinPrice}
-            onChange={(e) => handleMinPriceChange(e.target.value)}
+            onChange={(e) => setLocalMinPrice(e.target.value)}
+            onBlur={commitPriceFilter}
+            onKeyDown={handlePriceKeyDown}
             className="w-full"
             placeholder="Min"
           />
@@ -242,7 +207,9 @@ export function ListingFilters({ filters, onFiltersChange }: ListingFiltersProps
           <Input
             type="number"
             value={localMaxPrice}
-            onChange={(e) => handleMaxPriceChange(e.target.value)}
+            onChange={(e) => setLocalMaxPrice(e.target.value)}
+            onBlur={commitPriceFilter}
+            onKeyDown={handlePriceKeyDown}
             className="w-full"
             placeholder="Max"
           />
