@@ -101,7 +101,7 @@ export function ListingFilters({ filters, onFiltersChange }: ListingFiltersProps
     filters.maxPrice < 100000 ? 'price' : '',
   ].filter(Boolean).length;
 
-  const FilterContent = () => (
+  const filterContent = (
     <div className="space-y-6">
       {/* Category */}
       <div className="space-y-2">
@@ -258,7 +258,7 @@ export function ListingFilters({ filters, onFiltersChange }: ListingFiltersProps
 
       {/* Desktop Filters */}
       <div className="hidden lg:block">
-        <FilterContent />
+        {filterContent}
       </div>
 
       {/* Mobile Filter Button & Sheet */}
@@ -278,7 +278,7 @@ export function ListingFilters({ filters, onFiltersChange }: ListingFiltersProps
               <SheetTitle>Filter</SheetTitle>
             </SheetHeader>
             <div className="mt-6">
-              <FilterContent />
+              {filterContent}
             </div>
           </SheetContent>
         </Sheet>
