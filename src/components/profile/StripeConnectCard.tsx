@@ -52,7 +52,19 @@ export function StripeConnectCard() {
       const { data, error } = await supabase.functions.invoke('create-connect-account');
       if (error) throw error;
       if (data?.url) {
-        window.location.href = data.url;
+        const newWindow = window.open(data.url, '_blank', 'noopener,noreferrer');
+        if (!newWindow) {
+          // Fallback if popup blocked: show the URL to the user
+          toast({
+            title: 'Popup blockerad',
+            description: 'Tillåt popups eller kopiera länken nedan för att slutföra verifieringen.',
+            action: (
+              <a href={data.url} target="_blank" rel="noopener noreferrer" className="underline text-primary">
+                Öppna länk
+              </a>
+            ),
+          });
+        }
       }
     } catch (error) {
       toast({
