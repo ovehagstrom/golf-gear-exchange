@@ -338,6 +338,8 @@ export type Database = {
           is_verified: boolean | null
           phone: string | null
           seller_type: string | null
+          stripe_connect_account_id: string | null
+          stripe_connect_onboarding_complete: boolean | null
           updated_at: string | null
         }
         Insert: {
@@ -351,6 +353,8 @@ export type Database = {
           is_verified?: boolean | null
           phone?: string | null
           seller_type?: string | null
+          stripe_connect_account_id?: string | null
+          stripe_connect_onboarding_complete?: boolean | null
           updated_at?: string | null
         }
         Update: {
@@ -364,6 +368,8 @@ export type Database = {
           is_verified?: boolean | null
           phone?: string | null
           seller_type?: string | null
+          stripe_connect_account_id?: string | null
+          stripe_connect_onboarding_complete?: boolean | null
           updated_at?: string | null
         }
         Relationships: []
