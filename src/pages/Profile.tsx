@@ -14,6 +14,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import { SELLER_TYPES, SWEDISH_CITIES } from '@/lib/constants';
 import { Loader2, Shield, Star } from 'lucide-react';
+import { StripeConnectCard } from '@/components/profile/StripeConnectCard';
 
 export default function Profile() {
   const { user, loading: authLoading } = useAuth();
@@ -170,6 +171,9 @@ export default function Profile() {
             </div>
           </CardContent>
         </Card>
+
+        {/* Stripe Connect */}
+        <StripeConnectCard />
 
         {/* Profile Form */}
         <Card>

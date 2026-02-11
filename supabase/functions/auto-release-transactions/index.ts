@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
+import Stripe from "https://esm.sh/stripe@18.5.0";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.2";
 
 const corsHeaders = {
@@ -80,7 +81,39 @@ serve(async (req) => {
 
     for (const transaction of expiredTransactions || []) {
       try {
-        logStep("Processing transaction", { id: transaction.id });
+        // Transfer funds to seller's connected account
+        let transferId: string | null = null;
+        if (transaction.stripe_payment_intent_id && transaction.seller_payout > 0) {
+          const { data: sellerProfile } = await supabaseAdmin
+            .from('profiles')
+            .select('stripe_connect_account_id, stripe_connect_onboarding_complete')
+            .eq('id', transaction.seller_id)
+            .single();
+
+          if (sellerProfile?.stripe_connect_account_id && sellerProfile.stripe_connect_onboarding_complete) {
+            try {
+              const stripe = new Stripe(Deno.env.get("STRIPE_SECRET_KEY") || "", {
+                apiVersion: "2025-08-27.basil",
+              });
+
+              const paymentIntent = await stripe.paymentIntents.retrieve(transaction.stripe_payment_intent_id);
+              const chargeId = paymentIntent.latest_charge as string;
+
+              const transfer = await stripe.transfers.create({
+                amount: transaction.seller_payout,
+                currency: 'sek',
+                destination: sellerProfile.stripe_connect_account_id,
+                source_transaction: chargeId,
+                description: `Auto-utbetalning för order ${transaction.id}`,
+              });
+
+              transferId = transfer.id;
+              logStep("Auto-release transfer created", { transferId });
+            } catch (stripeError) {
+              logStep("Failed to create transfer", { error: String(stripeError) });
+            }
+          }
+        }
 
         // Update transaction to completed
         const { error: updateError } = await supabaseAdmin
@@ -89,6 +122,7 @@ serve(async (req) => {
             status: 'completed',
             completed_at: new Date().toISOString(),
             auto_release_at: null,
+            stripe_transfer_id: transferId,
           })
           .eq('id', transaction.id);
 

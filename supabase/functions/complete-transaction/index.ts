@@ -109,6 +109,40 @@ serve(async (req) => {
           throw new Error("Invalid transaction status for delivery confirmation");
         }
 
+        // Transfer funds to seller's connected account
+        let transferId: string | null = null;
+        if (transaction.stripe_payment_intent_id && transaction.seller_payout > 0) {
+          // Get seller's Connect account
+          const { data: sellerProfile } = await supabaseAdmin
+            .from('profiles')
+            .select('stripe_connect_account_id, stripe_connect_onboarding_complete')
+            .eq('id', transaction.seller_id)
+            .single();
+
+          if (sellerProfile?.stripe_connect_account_id && sellerProfile.stripe_connect_onboarding_complete) {
+            const stripe = new Stripe(Deno.env.get("STRIPE_SECRET_KEY") || "", {
+              apiVersion: "2025-08-27.basil",
+            });
+
+            // Get the charge from the payment intent
+            const paymentIntent = await stripe.paymentIntents.retrieve(transaction.stripe_payment_intent_id);
+            const chargeId = paymentIntent.latest_charge as string;
+
+            const transfer = await stripe.transfers.create({
+              amount: transaction.seller_payout,
+              currency: 'sek',
+              destination: sellerProfile.stripe_connect_account_id,
+              source_transaction: chargeId,
+              description: `Utbetalning för order ${transaction.id}`,
+            });
+
+            transferId = transfer.id;
+            logStep("Transfer created", { transferId, amount: transaction.seller_payout });
+          } else {
+            logStep("Seller has no verified Connect account, skipping transfer", { sellerId: transaction.seller_id });
+          }
+        }
+
         // Update transaction to completed
         await supabaseAdmin
           .from('transactions')
@@ -116,7 +150,8 @@ serve(async (req) => {
             status: 'completed',
             delivered_at: new Date().toISOString(),
             completed_at: new Date().toISOString(),
-            auto_release_at: null, // Clear auto-release since manually confirmed
+            auto_release_at: null,
+            stripe_transfer_id: transferId,
           })
           .eq('id', transaction_id);
 
@@ -135,12 +170,14 @@ serve(async (req) => {
           .insert({
             user_id: transaction.seller_id,
             title: 'Affären är slutförd!',
-            message: `Köparen har bekräftat mottagandet. Pengarna är på väg till dig!`,
+            message: transferId 
+              ? 'Köparen har bekräftat mottagandet. Pengarna har överförts till ditt konto!'
+              : 'Köparen har bekräftat mottagandet. Anslut ditt bankkonto för att få utbetalningen.',
             type: 'success',
             related_transaction_id: transaction_id,
           });
 
-        logStep("Transaction completed, delivery confirmed");
+        logStep("Transaction completed, delivery confirmed", { transferId });
         break;
       }
 
@@ -178,11 +215,42 @@ serve(async (req) => {
           throw new Error("Admin access required");
         }
 
+        // Transfer funds to seller's connected account
+        let adminTransferId: string | null = null;
+        if (transaction.stripe_payment_intent_id && transaction.seller_payout > 0) {
+          const { data: sellerProfile } = await supabaseAdmin
+            .from('profiles')
+            .select('stripe_connect_account_id, stripe_connect_onboarding_complete')
+            .eq('id', transaction.seller_id)
+            .single();
+
+          if (sellerProfile?.stripe_connect_account_id && sellerProfile.stripe_connect_onboarding_complete) {
+            const stripeClient = new Stripe(Deno.env.get("STRIPE_SECRET_KEY") || "", {
+              apiVersion: "2025-08-27.basil",
+            });
+
+            const paymentIntent = await stripeClient.paymentIntents.retrieve(transaction.stripe_payment_intent_id);
+            const chargeId = paymentIntent.latest_charge as string;
+
+            const transfer = await stripeClient.transfers.create({
+              amount: transaction.seller_payout,
+              currency: 'sek',
+              destination: sellerProfile.stripe_connect_account_id,
+              source_transaction: chargeId,
+              description: `Admin-utbetalning för order ${transaction.id}`,
+            });
+
+            adminTransferId = transfer.id;
+            logStep("Admin transfer created", { transferId: adminTransferId });
+          }
+        }
+
         await supabaseAdmin
           .from('transactions')
           .update({
             status: 'completed',
             completed_at: new Date().toISOString(),
+            stripe_transfer_id: adminTransferId,
           })
           .eq('id', transaction_id);
 
@@ -192,7 +260,7 @@ serve(async (req) => {
           .update({ status: 'sold' })
           .eq('id', transaction.listing_id);
 
-        logStep("Admin released funds");
+        logStep("Admin released funds", { transferId: adminTransferId });
         break;
       }
 
