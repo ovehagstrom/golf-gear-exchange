@@ -97,7 +97,12 @@ export default function Checkout() {
       if (error) throw error;
       
       if (data?.url) {
-        window.open(data.url, '_blank');
+        const newWindow = window.open(data.url, '_blank', 'noopener,noreferrer');
+        if (!newWindow) {
+          // Popup blocked – redirect in same tab as fallback
+          window.location.href = data.url;
+          return;
+        }
         toast({
           title: 'Betalning påbörjad',
           description: 'En ny flik har öppnats för att slutföra betalningen.',
