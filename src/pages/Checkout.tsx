@@ -97,21 +97,8 @@ export default function Checkout() {
       if (error) throw error;
       
       if (data?.url) {
-        // Try opening in new tab first
-        const newWindow = window.open(data.url, '_blank', 'noopener,noreferrer');
-        if (newWindow) {
-          toast({
-            title: 'Betalning påbörjad',
-            description: 'En ny flik har öppnats för att slutföra betalningen.',
-          });
-        } else {
-          // Popup blocked – try top-level navigation (works in iframes)
-          if (window.top) {
-            window.top.location.href = data.url;
-          } else {
-            window.location.href = data.url;
-          }
-        }
+        // Redirect in same tab – most reliable across all browsers
+        window.location.href = data.url;
       }
     } catch (error) {
       toast({ 
