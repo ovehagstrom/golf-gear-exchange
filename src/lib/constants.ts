@@ -2,6 +2,7 @@ export const CATEGORIES = [
   { value: 'driver', label: 'Driver' },
   { value: 'fairway_wood', label: 'Fairway Wood' },
   { value: 'hybrid', label: 'Hybrid' },
+  { value: 'driving_iron', label: 'Driving Iron / Utility Iron' },
   { value: 'iron_set', label: 'Järnset' },
   { value: 'wedge', label: 'Wedge' },
   { value: 'putter', label: 'Putter' },
