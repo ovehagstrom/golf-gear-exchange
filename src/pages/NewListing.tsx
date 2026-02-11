@@ -33,6 +33,7 @@ export default function NewListing() {
     shaftFlex: '',
     shaftLength: '',
     loft: '',
+    bounce: '',
     lieAngle: '',
     grip: '',
     condition: '',
@@ -134,6 +135,7 @@ export default function NewListing() {
         shaft_flex: formData.shaftFlex || null,
         shaft_length: formData.shaftLength || null,
         loft: formData.loft || null,
+        bounce: formData.bounce || null,
         lie_angle: formData.lieAngle || null,
         grip: formData.grip || null,
         description: formData.description || null,
@@ -369,6 +371,17 @@ export default function NewListing() {
 
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-2">
+                  <Label htmlFor="bounce">Bounce</Label>
+                  <Input
+                    id="bounce"
+                    name="bounce"
+                    value={formData.bounce}
+                    onChange={handleChange}
+                    placeholder="t.ex. 12°"
+                  />
+                </div>
+
+                <div className="space-y-2">
                   <Label htmlFor="lieAngle">Lie</Label>
                   <Input
                     id="lieAngle"
@@ -378,7 +391,9 @@ export default function NewListing() {
                     placeholder="t.ex. 2° upright"
                   />
                 </div>
+              </div>
 
+              <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-2">
                   <Label htmlFor="grip">Grepp</Label>
                   <Input
