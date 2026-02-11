@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
-import { Mail, Phone, MapPin, Send } from 'lucide-react';
+import { Mail, MapPin, Send } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 export default function Contact() {
@@ -21,7 +21,7 @@ export default function Contact() {
     }
     setSending(true);
 
-    const mailtoLink = `mailto:sten.hagstroem@gmail.com?subject=${encodeURIComponent(form.subject || 'Kontakt via GolfMarket')}&body=${encodeURIComponent(`Från: ${form.name} (${form.email})\n\n${form.message}`)}`;
+    const mailtoLink = `mailto:info@golfmarket.store?subject=${encodeURIComponent(form.subject || 'Kontakt via GolfMarket')}&body=${encodeURIComponent(`Från: ${form.name} (${form.email})\n\n${form.message}`)}`;
     window.location.href = mailtoLink;
 
     setTimeout(() => {
@@ -112,17 +112,8 @@ export default function Contact() {
                   <Mail className="h-5 w-5 text-primary mt-0.5 shrink-0" />
                   <div>
                     <p className="font-medium text-sm">E-post</p>
-                    <a href="mailto:sten.hagstroem@gmail.com" className="text-sm text-muted-foreground hover:text-foreground transition-colors">
-                      sten.hagstroem@gmail.com
-                    </a>
-                  </div>
-                </div>
-                <div className="flex items-start gap-3">
-                  <Phone className="h-5 w-5 text-primary mt-0.5 shrink-0" />
-                  <div>
-                    <p className="font-medium text-sm">Telefon</p>
-                    <a href="tel:+46763452458" className="text-sm text-muted-foreground hover:text-foreground transition-colors">
-                      +46 76 345 24 58
+                    <a href="mailto:info@golfmarket.store" className="text-sm text-muted-foreground hover:text-foreground transition-colors">
+                      info@golfmarket.store
                     </a>
                   </div>
                 </div>
