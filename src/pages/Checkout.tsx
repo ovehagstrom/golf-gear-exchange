@@ -97,8 +97,9 @@ export default function Checkout() {
       if (error) throw error;
       
       if (data?.url) {
-        // Redirect in same tab – most reliable across all browsers
-        window.location.href = data.url;
+        // Use top-level navigation to escape iframe (Lovable preview)
+        const target = window.top || window;
+        target.location.href = data.url;
       }
     } catch (error) {
       toast({ 
