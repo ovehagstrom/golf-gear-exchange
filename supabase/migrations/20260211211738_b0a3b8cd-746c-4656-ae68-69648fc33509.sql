@@ -1,0 +1,2 @@
+ALTER TABLE public.listings DROP CONSTRAINT IF EXISTS listings_category_check;
+ALTER TABLE public.listings ADD CONSTRAINT listings_category_check CHECK (category IN ('driver', 'fairway_wood', 'hybrid', 'driving_iron', 'iron_set', 'wedge', 'putter', 'shaft', 'complete_set', 'bag', 'accessories', 'other'));
