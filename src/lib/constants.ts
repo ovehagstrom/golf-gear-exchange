@@ -7,6 +7,7 @@ export const CATEGORIES = [
   { value: 'wedge', label: 'Wedge' },
   { value: 'putter', label: 'Putter' },
   { value: 'shaft', label: 'Shaft' },
+  { value: 'complete_set', label: 'Komplett set' },
   { value: 'bag', label: 'Bag' },
   { value: 'accessories', label: 'Tillbehör' },
   { value: 'other', label: 'Övrigt' },
