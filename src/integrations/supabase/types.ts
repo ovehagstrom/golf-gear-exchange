@@ -135,11 +135,13 @@ export type Database = {
           city: string
           condition: number
           created_at: string | null
+          description: string | null
           grip: string | null
           id: string
           images: string[] | null
           is_spec_verified: boolean | null
           lie_angle: string | null
+          loft: string | null
           model: string
           price: number
           shaft_flex: string | null
@@ -157,11 +159,13 @@ export type Database = {
           city: string
           condition: number
           created_at?: string | null
+          description?: string | null
           grip?: string | null
           id?: string
           images?: string[] | null
           is_spec_verified?: boolean | null
           lie_angle?: string | null
+          loft?: string | null
           model: string
           price: number
           shaft_flex?: string | null
@@ -179,11 +183,13 @@ export type Database = {
           city?: string
           condition?: number
           created_at?: string | null
+          description?: string | null
           grip?: string | null
           id?: string
           images?: string[] | null
           is_spec_verified?: boolean | null
           lie_angle?: string | null
+          loft?: string | null
           model?: string
           price?: number
           shaft_flex?: string | null
