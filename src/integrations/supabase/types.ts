@@ -130,6 +130,7 @@ export type Database = {
       }
       listings: {
         Row: {
+          bounce: string | null
           brand: string
           category: string
           city: string
@@ -154,6 +155,7 @@ export type Database = {
           year: number | null
         }
         Insert: {
+          bounce?: string | null
           brand: string
           category: string
           city: string
@@ -178,6 +180,7 @@ export type Database = {
           year?: number | null
         }
         Update: {
+          bounce?: string | null
           brand?: string
           category?: string
           city?: string

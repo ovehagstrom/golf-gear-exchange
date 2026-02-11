@@ -56,6 +56,7 @@ export const POPULAR_BRANDS = [
   'Aldila',
   'Graphite Design',
   'Project X',
+  'Övrigt',
 ] as const;
 
 export const SWEDISH_CITIES = [
