@@ -32,6 +32,7 @@ export default function NewListing() {
     shaftModel: '',
     shaftFlex: '',
     shaftLength: '',
+    loft: '',
     lieAngle: '',
     grip: '',
     condition: '',
@@ -95,7 +96,7 @@ export default function NewListing() {
     setImages((prev) => prev.filter((_, i) => i !== index));
   };
 
-  const isSpecVerified = formData.shaftModel && formData.shaftFlex && formData.shaftLength && formData.grip && images.length >= 3;
+  const isSpecVerified = formData.shaftModel && formData.shaftFlex && formData.shaftLength && formData.grip && formData.loft && images.length >= 3;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -132,8 +133,10 @@ export default function NewListing() {
         shaft_model: formData.shaftModel || null,
         shaft_flex: formData.shaftFlex || null,
         shaft_length: formData.shaftLength || null,
+        loft: formData.loft || null,
         lie_angle: formData.lieAngle || null,
         grip: formData.grip || null,
+        description: formData.description || null,
         condition: Number(formData.condition),
         price: Number(formData.price),
         city: formData.city,
@@ -300,7 +303,7 @@ export default function NewListing() {
           <Card>
             <CardHeader>
               <CardTitle className="text-lg flex items-center gap-2">
-                Shaft-specifikationer
+                Detaljerade specifikationer
                 {isSpecVerified && (
                   <span className="golf-badge-spec text-xs">
                     <CheckCircle2 className="h-3 w-3" />
@@ -340,7 +343,7 @@ export default function NewListing() {
                 </div>
               </div>
 
-              <div className="grid gap-4 sm:grid-cols-3">
+              <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-2">
                   <Label htmlFor="shaftLength">Längd</Label>
                   <Input
@@ -352,6 +355,19 @@ export default function NewListing() {
                   />
                 </div>
 
+                <div className="space-y-2">
+                  <Label htmlFor="loft">Loft</Label>
+                  <Input
+                    id="loft"
+                    name="loft"
+                    value={formData.loft}
+                    onChange={handleChange}
+                    placeholder="t.ex. 10.5°"
+                  />
+                </div>
+              </div>
+
+              <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-2">
                   <Label htmlFor="lieAngle">Lie</Label>
                   <Input
@@ -431,6 +447,25 @@ export default function NewListing() {
                   </Select>
                 </div>
               </div>
+            </CardContent>
+          </Card>
+
+          {/* Description */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg">Övrig information</CardTitle>
+              <CardDescription>
+                Beskriv eventuella detaljer som köpare bör veta om
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Textarea
+                name="description"
+                value={formData.description}
+                onChange={handleChange}
+                placeholder="T.ex. nytt grepp, skador, anledning till försäljning..."
+                rows={4}
+              />
             </CardContent>
           </Card>
 
