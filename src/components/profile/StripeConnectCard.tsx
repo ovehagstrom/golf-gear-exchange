@@ -52,7 +52,7 @@ export function StripeConnectCard() {
       const { data, error } = await supabase.functions.invoke('create-connect-account');
       if (error) throw error;
       if (data?.url) {
-        window.open(data.url, '_blank');
+        window.location.href = data.url;
       }
     } catch (error) {
       toast({
