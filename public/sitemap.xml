@@ -1,67 +1,67 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url>
-    <loc>https://golfmarket.se/</loc>
+    <loc>https://golfmarket.store/</loc>
     <changefreq>daily</changefreq>
     <priority>1.0</priority>
   </url>
   <url>
-    <loc>https://golfmarket.se/listings</loc>
+    <loc>https://golfmarket.store/listings</loc>
     <changefreq>hourly</changefreq>
     <priority>0.9</priority>
   </url>
   <url>
-    <loc>https://golfmarket.se/listings?category=driver</loc>
+    <loc>https://golfmarket.store/listings?category=driver</loc>
     <changefreq>daily</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://golfmarket.se/listings?category=iron_set</loc>
+    <loc>https://golfmarket.store/listings?category=iron_set</loc>
     <changefreq>daily</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://golfmarket.se/listings?category=wedge</loc>
+    <loc>https://golfmarket.store/listings?category=wedge</loc>
     <changefreq>daily</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://golfmarket.se/listings?category=putter</loc>
+    <loc>https://golfmarket.store/listings?category=putter</loc>
     <changefreq>daily</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://golfmarket.se/listings?category=shaft</loc>
+    <loc>https://golfmarket.store/listings?category=shaft</loc>
     <changefreq>daily</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
-    <loc>https://golfmarket.se/listings?category=bag</loc>
+    <loc>https://golfmarket.store/listings?category=bag</loc>
     <changefreq>daily</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
-    <loc>https://golfmarket.se/auth</loc>
+    <loc>https://golfmarket.store/auth</loc>
     <changefreq>monthly</changefreq>
     <priority>0.5</priority>
   </url>
   <url>
-    <loc>https://golfmarket.se/terms</loc>
+    <loc>https://golfmarket.store/terms</loc>
     <changefreq>monthly</changefreq>
     <priority>0.3</priority>
   </url>
   <url>
-    <loc>https://golfmarket.se/privacy</loc>
+    <loc>https://golfmarket.store/privacy</loc>
     <changefreq>monthly</changefreq>
     <priority>0.3</priority>
   </url>
   <url>
-    <loc>https://golfmarket.se/cookies</loc>
+    <loc>https://golfmarket.store/cookies</loc>
     <changefreq>monthly</changefreq>
     <priority>0.2</priority>
   </url>
   <url>
-    <loc>https://golfmarket.se/disclaimer</loc>
+    <loc>https://golfmarket.store/disclaimer</loc>
     <changefreq>monthly</changefreq>
     <priority>0.2</priority>
   </url>

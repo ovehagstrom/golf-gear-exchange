@@ -11,7 +11,7 @@ Disallow: /checkout
 Disallow: /admin
 
 # Sitemap
-Sitemap: https://golfmarket.se/sitemap.xml
+Sitemap: https://golfmarket.store/sitemap.xml
 
 # Crawl-delay
 Crawl-delay: 1
