@@ -83,7 +83,18 @@ export function StripeConnectCard() {
       const { data, error } = await supabase.functions.invoke('create-connect-login-link');
       if (error) throw error;
       if (data?.url) {
-        window.open(data.url, '_blank');
+        const newWindow = window.open(data.url, '_blank', 'noopener,noreferrer');
+        if (!newWindow) {
+          toast({
+            title: 'Popup blockerad',
+            description: 'Klicka på länken nedan för att öppna din dashboard.',
+            action: (
+              <a href={data.url} target="_blank" rel="noopener noreferrer" className="underline text-primary">
+                Öppna dashboard
+              </a>
+            ),
+          });
+        }
       }
     } catch (error) {
       toast({
