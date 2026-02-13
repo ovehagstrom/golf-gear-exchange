@@ -23,7 +23,6 @@ serve(async (req) => {
 
     let event: Stripe.Event;
 
-    // Verify webhook signature - REQUIRED for production
     if (!webhookSecret) {
       logStep("ERROR: STRIPE_WEBHOOK_SECRET is not configured");
       return new Response("Webhook secret not configured", { status: 500 });
@@ -43,15 +42,30 @@ serve(async (req) => {
 
     logStep("Received verified event", { type: event.type, id: event.id });
 
-    // Log the event to webhook_events table
+    // Check for duplicate event processing
+    const { data: existingEvent } = await supabaseAdmin
+      .from('webhook_events')
+      .select('id, processed')
+      .eq('stripe_event_id', event.id)
+      .single();
+
+    if (existingEvent?.processed) {
+      logStep("Event already processed, skipping", { eventId: event.id });
+      return new Response(JSON.stringify({ received: true, duplicate: true }), {
+        headers: { "Content-Type": "application/json" },
+        status: 200,
+      });
+    }
+
+    // Log the event
     const { data: webhookEvent, error: logError } = await supabaseAdmin
       .from('webhook_events')
-      .insert({
+      .upsert({
         stripe_event_id: event.id,
         event_type: event.type,
         payload: event.data.object,
         processed: false,
-      })
+      }, { onConflict: 'stripe_event_id' })
       .select()
       .single();
 
@@ -82,7 +96,6 @@ serve(async (req) => {
       }
     };
 
-    // Helper function to update webhook event status
     const updateWebhookEvent = async (processed: boolean, errorMessage?: string, transactionId?: string) => {
       if (webhookEvent?.id) {
         await supabaseAdmin
@@ -113,14 +126,12 @@ serve(async (req) => {
             paymentStatus: session.payment_status 
           });
 
-          // Verify payment is actually successful
           if (session.payment_status !== 'paid') {
             logStep("Payment not completed yet", { status: session.payment_status });
             await updateWebhookEvent(false, "Payment not completed");
             break;
           }
 
-          // Update transaction to paid
           const { data: transaction, error: txError } = await supabaseAdmin
             .from('transactions')
             .update({
@@ -139,7 +150,6 @@ serve(async (req) => {
 
           logStep("Transaction marked as paid", { transactionId: transaction.id });
 
-          // Update listing status to reserved
           if (session.metadata?.listing_id) {
             await supabaseAdmin
               .from('listings')
@@ -148,7 +158,6 @@ serve(async (req) => {
             logStep("Listing marked as reserved");
           }
 
-          // Notify seller: "Product is paid - ship the item"
           await createNotification(
             transaction.seller_id,
             '💰 Betalning mottagen!',
@@ -157,7 +166,6 @@ serve(async (req) => {
             transaction.id
           );
 
-          // Notify buyer: "Payment confirmed"
           await createNotification(
             transaction.buyer_id,
             '✅ Betalning genomförd!',
@@ -174,7 +182,6 @@ serve(async (req) => {
           const paymentIntent = event.data.object as Stripe.PaymentIntent;
           logStep("Payment failed", { paymentIntentId: paymentIntent.id });
           
-          // Find and update transaction
           const { data: transaction, error: txError } = await supabaseAdmin
             .from('transactions')
             .update({ status: 'cancelled' })
@@ -183,13 +190,11 @@ serve(async (req) => {
             .single();
 
           if (txError) {
-            // Transaction might not exist yet if checkout wasn't completed
             logStep("Could not update transaction (might not exist)", txError);
             await updateWebhookEvent(false, txError.message);
             break;
           }
 
-          // Notify buyer about failed payment
           await createNotification(
             transaction.buyer_id,
             '❌ Betalning misslyckades',
@@ -206,7 +211,6 @@ serve(async (req) => {
           const charge = event.data.object as Stripe.Charge;
           logStep("Charge refunded", { chargeId: charge.id, paymentIntent: charge.payment_intent });
           
-          // Find transaction by payment intent
           const { data: transaction, error: txError } = await supabaseAdmin
             .from('transactions')
             .update({ status: 'refunded' })
@@ -220,7 +224,6 @@ serve(async (req) => {
             break;
           }
 
-          // Notify both parties
           await createNotification(
             transaction.buyer_id,
             '💸 Återbetalning genomförd',
@@ -243,18 +246,21 @@ serve(async (req) => {
 
         case 'charge.dispute.created': {
           const dispute = event.data.object as Stripe.Dispute;
-          logStep("Dispute created", { disputeId: dispute.id, chargeId: dispute.charge });
+          logStep("Dispute created", { 
+            disputeId: dispute.id, 
+            chargeId: dispute.charge,
+            amount: dispute.amount,
+            reason: dispute.reason,
+          });
           
-          // Get the charge to find payment intent
           const charge = await stripe.charges.retrieve(dispute.charge as string);
           
-          // Find and update transaction
           const { data: transaction, error: txError } = await supabaseAdmin
             .from('transactions')
             .update({ 
               status: 'disputed',
               disputed_at: new Date().toISOString(),
-              dispute_reason: dispute.reason || 'Tvist öppnad via Stripe',
+              dispute_reason: `Stripe chargeback: ${dispute.reason || 'unknown'}. Dispute ID: ${dispute.id}. Belopp: ${dispute.amount / 100} ${dispute.currency.toUpperCase()}`,
             })
             .eq('stripe_payment_intent_id', charge.payment_intent as string)
             .select('*, listings(title)')
@@ -266,7 +272,16 @@ serve(async (req) => {
             break;
           }
 
-          // Notify admin about dispute
+          logStep("Chargeback details", {
+            transactionId: transaction.id,
+            disputeAmount: dispute.amount,
+            disputeFee: (dispute as Record<string, unknown>).balance_transactions,
+            sellerId: transaction.seller_id,
+            transferId: transaction.stripe_transfer_id,
+            regressClaim: transaction.stripe_transfer_id ? 'Transfer exists - potential regress against seller' : 'No transfer - platform absorbs loss',
+          });
+
+          // Notify admins with detailed chargeback info
           const { data: adminUsers } = await supabaseAdmin
             .from('user_roles')
             .select('user_id')
@@ -276,15 +291,18 @@ serve(async (req) => {
             for (const admin of adminUsers) {
               await createNotification(
                 admin.user_id,
-                '⚠️ Tvist skapad',
-                `En tvist har öppnats för order "${transaction.listings?.title || 'Produkt'}". Utbetalning pausad.`,
+                '🚨 Chargeback mottagen',
+                `Chargeback på ${dispute.amount / 100} ${dispute.currency.toUpperCase()} för "${transaction.listings?.title || 'Produkt'}". ` +
+                `Orsak: ${dispute.reason}. ` +
+                (transaction.stripe_transfer_id 
+                  ? `Transfer ${transaction.stripe_transfer_id} finns – regressfordran mot säljaren.`
+                  : `Ingen transfer gjord – plattformen absorberar förlusten.`),
                 'dispute_created',
                 transaction.id
               );
             }
           }
 
-          // Notify both parties
           await createNotification(
             transaction.buyer_id,
             '⚠️ Tvist registrerad',
@@ -295,11 +313,139 @@ serve(async (req) => {
 
           await createNotification(
             transaction.seller_id,
-            '⚠️ Tvist registrerad',
-            `En tvist har registrerats för "${transaction.listings?.title || 'Produkt'}". Utbetalning pausad tills ärendet är löst.`,
+            '⚠️ Chargeback registrerad',
+            `En chargeback har registrerats för "${transaction.listings?.title || 'Produkt'}". Utbetalning pausad. ` +
+            `Enligt användarvillkoren är du som säljare ekonomiskt ansvarig för chargebacks.`,
             'dispute_created',
             transaction.id
           );
+
+          await updateWebhookEvent(true, undefined, transaction.id);
+          break;
+        }
+
+        case 'charge.dispute.closed': {
+          const dispute = event.data.object as Stripe.Dispute;
+          logStep("Dispute closed", { 
+            disputeId: dispute.id, 
+            status: dispute.status,
+            chargeId: dispute.charge,
+          });
+
+          const charge = await stripe.charges.retrieve(dispute.charge as string);
+
+          const { data: transaction, error: txError } = await supabaseAdmin
+            .from('transactions')
+            .select('*, listings(title)')
+            .eq('stripe_payment_intent_id', charge.payment_intent as string)
+            .single();
+
+          if (txError || !transaction) {
+            logStep("Could not find transaction for closed dispute", txError);
+            await updateWebhookEvent(false, txError?.message || "Transaction not found");
+            break;
+          }
+
+          if (dispute.status === 'lost') {
+            logStep("Dispute LOST - attempting regress against seller", {
+              transactionId: transaction.id,
+              sellerId: transaction.seller_id,
+              transferId: transaction.stripe_transfer_id,
+              disputeAmount: dispute.amount,
+            });
+
+            // If transfer exists, reverse it to reclaim funds from seller
+            if (transaction.stripe_transfer_id) {
+              try {
+                const transfer = await stripe.transfers.retrieve(transaction.stripe_transfer_id);
+                const reversibleAmount = transfer.amount - (transfer.amount_reversed || 0);
+
+                if (reversibleAmount > 0) {
+                  const reversal = await stripe.transfers.createReversal(transaction.stripe_transfer_id, {
+                    amount: reversibleAmount,
+                    description: `Regress: chargeback förlorad för order ${transaction.id}`,
+                  }, {
+                    idempotencyKey: `dispute_reversal_${dispute.id}`,
+                  });
+
+                  logStep("Regress reversal created", { 
+                    reversalId: reversal.id, 
+                    amount: reversibleAmount,
+                  });
+                }
+              } catch (reversalError) {
+                logStep("CRITICAL: Failed to reverse transfer for lost dispute", {
+                  error: String(reversalError),
+                  transferId: transaction.stripe_transfer_id,
+                });
+              }
+            }
+
+            await supabaseAdmin
+              .from('transactions')
+              .update({ status: 'refunded' })
+              .eq('id', transaction.id);
+
+            // Notify admins
+            const { data: adminUsers } = await supabaseAdmin
+              .from('user_roles')
+              .select('user_id')
+              .eq('role', 'admin');
+
+            if (adminUsers) {
+              for (const admin of adminUsers) {
+                await createNotification(
+                  admin.user_id,
+                  '❌ Chargeback förlorad',
+                  `Chargeback för "${transaction.listings?.title || 'Produkt'}" har förlorats. ` +
+                  `Belopp: ${dispute.amount / 100} ${dispute.currency.toUpperCase()}. ` +
+                  (transaction.stripe_transfer_id 
+                    ? `Regressfordran: försökt återkräva medel från säljarens konto.`
+                    : `Ingen transfer att reversera.`),
+                  'dispute_closed',
+                  transaction.id
+                );
+              }
+            }
+
+            await createNotification(
+              transaction.seller_id,
+              '❌ Chargeback förlorad',
+              `Chargebacken för "${transaction.listings?.title || 'Produkt'}" har avgjorts till köparens fördel. ` +
+              `Enligt villkoren debiteras ditt konto.`,
+              'dispute_closed',
+              transaction.id
+            );
+
+          } else if (dispute.status === 'won') {
+            logStep("Dispute WON", { transactionId: transaction.id });
+
+            // Restore transaction status if it was disputed
+            if (transaction.status === 'disputed') {
+              const previousStatus = transaction.stripe_transfer_id ? 'completed' : 'paid';
+              await supabaseAdmin
+                .from('transactions')
+                .update({ status: previousStatus })
+                .eq('id', transaction.id);
+            }
+
+            const { data: adminUsers } = await supabaseAdmin
+              .from('user_roles')
+              .select('user_id')
+              .eq('role', 'admin');
+
+            if (adminUsers) {
+              for (const admin of adminUsers) {
+                await createNotification(
+                  admin.user_id,
+                  '✅ Chargeback vunnen',
+                  `Chargebacken för "${transaction.listings?.title || 'Produkt'}" avgjordes till plattformens fördel.`,
+                  'dispute_closed',
+                  transaction.id
+                );
+              }
+            }
+          }
 
           await updateWebhookEvent(true, undefined, transaction.id);
           break;

@@ -494,6 +494,36 @@ export type Database = {
           },
         ]
       }
+      seller_annual_reports: {
+        Row: {
+          created_at: string
+          id: string
+          seller_id: string
+          total_gross_revenue: number
+          total_transactions: number
+          updated_at: string
+          year: number
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          seller_id: string
+          total_gross_revenue?: number
+          total_transactions?: number
+          updated_at?: string
+          year: number
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          seller_id?: string
+          total_gross_revenue?: number
+          total_transactions?: number
+          updated_at?: string
+          year?: number
+        }
+        Relationships: []
+      }
       transactions: {
         Row: {
           amount: number
@@ -723,6 +753,10 @@ export type Database = {
       }
       increment_completed_deals: {
         Args: { seller_id: string }
+        Returns: undefined
+      }
+      update_seller_annual_stats: {
+        Args: { p_amount: number; p_seller_id: string }
         Returns: undefined
       }
     }
