@@ -11,6 +11,79 @@ const logStep = (step: string, details?: unknown) => {
   console.log(`[COMPLETE-TRANSACTION] ${step}`, details ? JSON.stringify(details) : '');
 };
 
+const getStripe = () => new Stripe(Deno.env.get("STRIPE_SECRET_KEY") || "", {
+  apiVersion: "2025-08-27.basil",
+});
+
+// Helper: Create transfer to seller's connected account
+async function createSellerTransfer(
+  supabaseAdmin: ReturnType<typeof createClient>,
+  transaction: Record<string, unknown>,
+  description: string,
+  idempotencyKey: string
+): Promise<string | null> {
+  if (!transaction.stripe_payment_intent_id || (transaction.seller_payout as number) <= 0) {
+    return null;
+  }
+
+  const { data: sellerProfile } = await supabaseAdmin
+    .from('profiles')
+    .select('stripe_connect_account_id, stripe_connect_onboarding_complete')
+    .eq('id', transaction.seller_id as string)
+    .single();
+
+  if (!sellerProfile?.stripe_connect_account_id || !sellerProfile.stripe_connect_onboarding_complete) {
+    logStep("Seller has no verified Connect account, skipping transfer", { sellerId: transaction.seller_id });
+    return null;
+  }
+
+  const stripe = getStripe();
+  const paymentIntent = await stripe.paymentIntents.retrieve(transaction.stripe_payment_intent_id as string);
+  const chargeId = paymentIntent.latest_charge as string;
+
+  const transfer = await stripe.transfers.create({
+    amount: transaction.seller_payout as number,
+    currency: 'sek',
+    destination: sellerProfile.stripe_connect_account_id,
+    source_transaction: chargeId,
+    description,
+  }, {
+    idempotencyKey,
+  });
+
+  logStep("Transfer created", { transferId: transfer.id, amount: transaction.seller_payout });
+  return transfer.id;
+}
+
+// Helper: Reverse an existing transfer before refunding
+async function reverseTransferBeforeRefund(
+  transaction: Record<string, unknown>
+): Promise<void> {
+  const transferId = transaction.stripe_transfer_id as string;
+  if (!transferId) return;
+
+  const stripe = getStripe();
+
+  // Check the transfer's current state
+  const transfer = await stripe.transfers.retrieve(transferId);
+  const reversibleAmount = transfer.amount - (transfer.amount_reversed || 0);
+
+  if (reversibleAmount <= 0) {
+    logStep("Transfer already fully reversed", { transferId });
+    return;
+  }
+
+  // Create reversal with idempotency key
+  const reversal = await stripe.transfers.createReversal(transferId, {
+    amount: reversibleAmount,
+    description: `Återkrav för order ${transaction.id}`,
+  }, {
+    idempotencyKey: `reversal_${transaction.id}`,
+  });
+
+  logStep("Transfer reversed", { reversalId: reversal.id, amount: reversibleAmount });
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -63,7 +136,6 @@ serve(async (req) => {
     // Handle different actions
     switch (action) {
       case 'mark_shipped': {
-        // Only seller can mark as shipped
         if (transaction.seller_id !== user.id) {
           throw new Error("Only the seller can mark as shipped");
         }
@@ -71,7 +143,6 @@ serve(async (req) => {
           throw new Error("Can only mark as shipped when status is paid");
         }
         
-        // Set auto-release to 5 days from now
         const autoReleaseAt = new Date();
         autoReleaseAt.setDate(autoReleaseAt.getDate() + 5);
         
@@ -85,7 +156,6 @@ serve(async (req) => {
           })
           .eq('id', transaction_id);
 
-        // Create notification for buyer
         await supabaseAdmin
           .from('notifications')
           .insert({
@@ -101,7 +171,6 @@ serve(async (req) => {
       }
 
       case 'confirm_delivery': {
-        // Only buyer can confirm delivery
         if (transaction.buyer_id !== user.id) {
           throw new Error("Only the buyer can confirm delivery");
         }
@@ -109,41 +178,19 @@ serve(async (req) => {
           throw new Error("Invalid transaction status for delivery confirmation");
         }
 
-        // Transfer funds to seller's connected account
-        let transferId: string | null = null;
-        if (transaction.stripe_payment_intent_id && transaction.seller_payout > 0) {
-          // Get seller's Connect account
-          const { data: sellerProfile } = await supabaseAdmin
-            .from('profiles')
-            .select('stripe_connect_account_id, stripe_connect_onboarding_complete')
-            .eq('id', transaction.seller_id)
-            .single();
-
-          if (sellerProfile?.stripe_connect_account_id && sellerProfile.stripe_connect_onboarding_complete) {
-            const stripe = new Stripe(Deno.env.get("STRIPE_SECRET_KEY") || "", {
-              apiVersion: "2025-08-27.basil",
-            });
-
-            // Get the charge from the payment intent
-            const paymentIntent = await stripe.paymentIntents.retrieve(transaction.stripe_payment_intent_id);
-            const chargeId = paymentIntent.latest_charge as string;
-
-            const transfer = await stripe.transfers.create({
-              amount: transaction.seller_payout,
-              currency: 'sek',
-              destination: sellerProfile.stripe_connect_account_id,
-              source_transaction: chargeId,
-              description: `Utbetalning för order ${transaction.id}`,
-            });
-
-            transferId = transfer.id;
-            logStep("Transfer created", { transferId, amount: transaction.seller_payout });
-          } else {
-            logStep("Seller has no verified Connect account, skipping transfer", { sellerId: transaction.seller_id });
-          }
+        // Prevent duplicate transfer
+        if (transaction.stripe_transfer_id) {
+          logStep("Transfer already exists, skipping", { transferId: transaction.stripe_transfer_id });
         }
 
-        // Update transaction to completed
+        const transferId = transaction.stripe_transfer_id ||
+          await createSellerTransfer(
+            supabaseAdmin,
+            transaction,
+            `Utbetalning för order ${transaction.id}`,
+            `transfer_${transaction.id}`
+          );
+
         await supabaseAdmin
           .from('transactions')
           .update({
@@ -155,16 +202,19 @@ serve(async (req) => {
           })
           .eq('id', transaction_id);
 
-        // Update listing to sold
         await supabaseAdmin
           .from('listings')
           .update({ status: 'sold' })
           .eq('id', transaction.listing_id);
 
-        // Update seller's completed deals count
         await supabaseAdmin.rpc('increment_completed_deals', { seller_id: transaction.seller_id });
 
-        // Create notification for seller
+        // Update DAC7 seller annual stats
+        await supabaseAdmin.rpc('update_seller_annual_stats', {
+          p_seller_id: transaction.seller_id,
+          p_amount: transaction.amount,
+        });
+
         await supabaseAdmin
           .from('notifications')
           .insert({
@@ -182,7 +232,6 @@ serve(async (req) => {
       }
 
       case 'report_problem': {
-        // Only buyer can report problem
         if (transaction.buyer_id !== user.id) {
           throw new Error("Only the buyer can report a problem");
         }
@@ -203,7 +252,6 @@ serve(async (req) => {
       }
 
       case 'admin_release': {
-        // Check if user is admin
         const { data: roleData } = await supabaseAdmin
           .from('user_roles')
           .select('role')
@@ -215,35 +263,18 @@ serve(async (req) => {
           throw new Error("Admin access required");
         }
 
-        // Transfer funds to seller's connected account
-        let adminTransferId: string | null = null;
-        if (transaction.stripe_payment_intent_id && transaction.seller_payout > 0) {
-          const { data: sellerProfile } = await supabaseAdmin
-            .from('profiles')
-            .select('stripe_connect_account_id, stripe_connect_onboarding_complete')
-            .eq('id', transaction.seller_id)
-            .single();
-
-          if (sellerProfile?.stripe_connect_account_id && sellerProfile.stripe_connect_onboarding_complete) {
-            const stripeClient = new Stripe(Deno.env.get("STRIPE_SECRET_KEY") || "", {
-              apiVersion: "2025-08-27.basil",
-            });
-
-            const paymentIntent = await stripeClient.paymentIntents.retrieve(transaction.stripe_payment_intent_id);
-            const chargeId = paymentIntent.latest_charge as string;
-
-            const transfer = await stripeClient.transfers.create({
-              amount: transaction.seller_payout,
-              currency: 'sek',
-              destination: sellerProfile.stripe_connect_account_id,
-              source_transaction: chargeId,
-              description: `Admin-utbetalning för order ${transaction.id}`,
-            });
-
-            adminTransferId = transfer.id;
-            logStep("Admin transfer created", { transferId: adminTransferId });
-          }
+        // Prevent duplicate transfer
+        if (transaction.stripe_transfer_id) {
+          logStep("Transfer already exists for admin_release, skipping", { transferId: transaction.stripe_transfer_id });
         }
+
+        const adminTransferId = transaction.stripe_transfer_id ||
+          await createSellerTransfer(
+            supabaseAdmin,
+            transaction,
+            `Admin-utbetalning för order ${transaction.id}`,
+            `transfer_admin_${transaction.id}`
+          );
 
         await supabaseAdmin
           .from('transactions')
@@ -254,18 +285,22 @@ serve(async (req) => {
           })
           .eq('id', transaction_id);
 
-        // Update listing to sold
         await supabaseAdmin
           .from('listings')
           .update({ status: 'sold' })
           .eq('id', transaction.listing_id);
+
+        // Update DAC7 seller annual stats
+        await supabaseAdmin.rpc('update_seller_annual_stats', {
+          p_seller_id: transaction.seller_id,
+          p_amount: transaction.amount,
+        });
 
         logStep("Admin released funds", { transferId: adminTransferId });
         break;
       }
 
       case 'admin_refund': {
-        // Check if user is admin
         const { data: roleData } = await supabaseAdmin
           .from('user_roles')
           .select('role')
@@ -277,15 +312,35 @@ serve(async (req) => {
           throw new Error("Admin access required");
         }
 
-        // In production, trigger Stripe refund here
-        const stripe = new Stripe(Deno.env.get("STRIPE_SECRET_KEY") || "", {
-          apiVersion: "2025-08-27.basil",
-        });
+        // Prevent duplicate refund
+        if (transaction.status === 'refunded') {
+          throw new Error("Transaction is already refunded");
+        }
 
+        const stripe = getStripe();
+
+        // If a transfer was already made, reverse it first
+        if (transaction.stripe_transfer_id) {
+          logStep("Transfer exists, reversing before refund", { transferId: transaction.stripe_transfer_id });
+          
+          try {
+            await reverseTransferBeforeRefund(transaction);
+            logStep("Transfer reversed successfully");
+          } catch (reversalError) {
+            const msg = reversalError instanceof Error ? reversalError.message : String(reversalError);
+            logStep("CRITICAL: Transfer reversal failed", { error: msg, transferId: transaction.stripe_transfer_id });
+            throw new Error(`Kan inte återbetala: misslyckades att återkräva medel från säljarens konto. Fel: ${msg}`);
+          }
+        }
+
+        // Now refund the customer
         if (transaction.stripe_payment_intent_id) {
           await stripe.refunds.create({
             payment_intent: transaction.stripe_payment_intent_id,
+          }, {
+            idempotencyKey: `refund_${transaction.id}`,
           });
+          logStep("Stripe refund created");
         }
 
         await supabaseAdmin
@@ -299,7 +354,7 @@ serve(async (req) => {
           .update({ status: 'active' })
           .eq('id', transaction.listing_id);
 
-        logStep("Admin refunded transaction");
+        logStep("Admin refunded transaction (with reverse transfer if applicable)");
         break;
       }
 

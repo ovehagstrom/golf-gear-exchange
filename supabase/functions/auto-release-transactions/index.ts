@@ -99,13 +99,23 @@ serve(async (req) => {
               const paymentIntent = await stripe.paymentIntents.retrieve(transaction.stripe_payment_intent_id);
               const chargeId = paymentIntent.latest_charge as string;
 
-              const transfer = await stripe.transfers.create({
-                amount: transaction.seller_payout,
-                currency: 'sek',
-                destination: sellerProfile.stripe_connect_account_id,
-                source_transaction: chargeId,
-                description: `Auto-utbetalning för order ${transaction.id}`,
-              });
+              // Prevent duplicate transfer
+              if (transaction.stripe_transfer_id) {
+                logStep("Transfer already exists, skipping", { transferId: transaction.stripe_transfer_id });
+                transferId = transaction.stripe_transfer_id;
+              } else {
+                const transfer = await stripe.transfers.create({
+                  amount: transaction.seller_payout,
+                  currency: 'sek',
+                  destination: sellerProfile.stripe_connect_account_id,
+                  source_transaction: chargeId,
+                  description: `Auto-utbetalning för order ${transaction.id}`,
+                }, {
+                  idempotencyKey: `auto_transfer_${transaction.id}`,
+                });
+
+                transferId = transfer.id;
+              }
 
               transferId = transfer.id;
               logStep("Auto-release transfer created", { transferId });
@@ -139,6 +149,12 @@ serve(async (req) => {
         // Increment seller's completed deals
         await supabaseAdmin.rpc('increment_completed_deals', { 
           seller_id: transaction.seller_id 
+        });
+
+        // Update DAC7 seller annual stats
+        await supabaseAdmin.rpc('update_seller_annual_stats', {
+          p_seller_id: transaction.seller_id,
+          p_amount: transaction.amount,
         });
 
         // Create notification for both buyer and seller
