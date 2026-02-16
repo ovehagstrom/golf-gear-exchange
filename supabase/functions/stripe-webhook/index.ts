@@ -21,6 +21,13 @@ serve(async (req) => {
     const sig = req.headers.get("stripe-signature");
     const webhookSecret = Deno.env.get("STRIPE_WEBHOOK_SECRET");
 
+    logStep("DEBUG: Webhook secret check", {
+      exists: !!webhookSecret,
+      length: webhookSecret?.length,
+      prefix: webhookSecret?.substring(0, 6),
+      sigHeader: sig?.substring(0, 20),
+    });
+
     let event: Stripe.Event;
 
     if (!webhookSecret) {
