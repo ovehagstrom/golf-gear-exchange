@@ -6,10 +6,11 @@ import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Card, CardContent } from '@/components/ui/card';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Tables } from '@/integrations/supabase/types';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
-import { Check, X, ArrowRightLeft, Loader2, CreditCard, Shield, CheckCircle, Package } from 'lucide-react';
+import { Check, X, ArrowRightLeft, Loader2, CreditCard, Shield, CheckCircle, Package, AlertCircle } from 'lucide-react';
 import { PublicProfile } from '@/lib/types';
 
 type BidWithProfile = Tables<'bids'> & {
@@ -38,6 +39,7 @@ export function BidCard({ bid, isSeller, currentUserId, onUpdate }: BidCardProps
   const [counterMessage, setCounterMessage] = useState('');
   const [loading, setLoading] = useState(false);
   const [transactionStatus, setTransactionStatus] = useState<string | null>(null);
+  const [sellerStripeReady, setSellerStripeReady] = useState<boolean | null>(null);
   const { toast } = useToast();
   
   const isBidder = currentUserId === bid.bidder_id;
@@ -83,6 +85,22 @@ export function BidCard({ bid, isSeller, currentUserId, onUpdate }: BidCardProps
       supabase.removeChannel(channel);
     };
   }, [bid.id, bid.status]);
+
+  // Check seller's Stripe onboarding before allowing bid acceptance
+  useEffect(() => {
+    if (isSeller && currentUserId) {
+      supabase
+        .from('profiles')
+        .select('stripe_connect_account_id, stripe_connect_onboarding_complete')
+        .eq('id', currentUserId)
+        .single()
+        .then(({ data }) => {
+          setSellerStripeReady(!!(data?.stripe_connect_account_id && data?.stripe_connect_onboarding_complete));
+        });
+    } else {
+      setSellerStripeReady(true);
+    }
+  }, [isSeller, currentUserId]);
 
   const formatPrice = (price: number) => {
     return new Intl.NumberFormat('sv-SE', {
@@ -205,6 +223,16 @@ export function BidCard({ bid, isSeller, currentUserId, onUpdate }: BidCardProps
         {/* Seller actions */}
         {isSeller && bid.status === 'pending' && (
           <div className="mt-4 space-y-3">
+            {/* Stripe gate for seller */}
+            {sellerStripeReady === false && (
+              <Alert variant="destructive">
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription>
+                  Du måste ansluta ditt bankkonto för att acceptera bud.{' '}
+                  <a href="/profile" className="underline font-medium">Gå till profilen</a>
+                </AlertDescription>
+              </Alert>
+            )}
             {showCounter ? (
               <div className="space-y-3 p-3 border rounded-lg">
                 <Input
@@ -230,7 +258,7 @@ export function BidCard({ bid, isSeller, currentUserId, onUpdate }: BidCardProps
               </div>
             ) : (
               <div className="flex gap-2">
-                <Button size="sm" onClick={handleAccept} disabled={loading} className="flex-1">
+                <Button size="sm" onClick={handleAccept} disabled={loading || !sellerStripeReady} className="flex-1">
                   <Check className="h-4 w-4 mr-1" />
                   Acceptera
                 </Button>
@@ -238,7 +266,7 @@ export function BidCard({ bid, isSeller, currentUserId, onUpdate }: BidCardProps
                   <X className="h-4 w-4 mr-1" />
                   Avslå
                 </Button>
-                <Button size="sm" variant="secondary" onClick={() => setShowCounter(true)} disabled={loading}>
+                <Button size="sm" variant="secondary" onClick={() => setShowCounter(true)} disabled={loading || !sellerStripeReady}>
                   <ArrowRightLeft className="h-4 w-4 mr-1" />
                   Motbud
                 </Button>
@@ -252,11 +280,11 @@ export function BidCard({ bid, isSeller, currentUserId, onUpdate }: BidCardProps
           <div className="mt-4 space-y-3">
             {transactionStatus && transactionStatus !== 'pending_payment' ? (
               // Transaction exists and is paid or further
-              <div className="p-3 bg-green-50 border border-green-200 rounded-lg">
+              <div className="p-3 bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 rounded-lg">
                 <div className="flex items-center gap-2">
-                  <CheckCircle className="h-5 w-5 text-green-600 flex-shrink-0" />
+                  <CheckCircle className="h-5 w-5 text-green-600 dark:text-green-400 flex-shrink-0" />
                   <div>
-                    <p className="font-medium text-green-800">
+                    <p className="font-medium text-green-800 dark:text-green-200">
                       {transactionStatus === 'paid' && 'Betald – väntar på leverans'}
                       {transactionStatus === 'shipped' && 'Skickad – på väg till dig'}
                       {transactionStatus === 'delivered' && 'Levererad'}
@@ -265,7 +293,7 @@ export function BidCard({ bid, isSeller, currentUserId, onUpdate }: BidCardProps
                       {transactionStatus === 'refunded' && 'Återbetald'}
                       {transactionStatus === 'cancelled' && 'Avbruten'}
                     </p>
-                    <p className="text-sm text-green-700">
+                    <p className="text-sm text-green-700 dark:text-green-300">
                       {transactionStatus === 'paid' && 'Säljaren förbereder din leverans.'}
                       {transactionStatus === 'shipped' && 'Du kommer att kunna bekräfta mottagandet när varan anländer.'}
                       {transactionStatus === 'completed' && 'Tack för ditt köp!'}

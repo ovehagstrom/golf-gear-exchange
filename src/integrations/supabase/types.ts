@@ -128,6 +128,59 @@ export type Database = {
           },
         ]
       }
+      disputes: {
+        Row: {
+          admin_notes: string | null
+          created_at: string
+          description: string
+          evidence_package: Json | null
+          id: string
+          opened_by: string
+          opened_by_role: string
+          reason: string
+          resolution_type: string | null
+          status: string
+          transaction_id: string
+          updated_at: string
+        }
+        Insert: {
+          admin_notes?: string | null
+          created_at?: string
+          description: string
+          evidence_package?: Json | null
+          id?: string
+          opened_by: string
+          opened_by_role: string
+          reason: string
+          resolution_type?: string | null
+          status?: string
+          transaction_id: string
+          updated_at?: string
+        }
+        Update: {
+          admin_notes?: string | null
+          created_at?: string
+          description?: string
+          evidence_package?: Json | null
+          id?: string
+          opened_by?: string
+          opened_by_role?: string
+          reason?: string
+          resolution_type?: string | null
+          status?: string
+          transaction_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "disputes_transaction_id_fkey"
+            columns: ["transaction_id"]
+            isOneToOne: false
+            referencedRelation: "transactions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       listings: {
         Row: {
           bounce: string | null
@@ -527,6 +580,7 @@ export type Database = {
       transactions: {
         Row: {
           amount: number
+          auto_cancel_reason: string | null
           auto_release_at: string | null
           bid_id: string
           buyer_id: string
@@ -537,10 +591,12 @@ export type Database = {
           disputed_at: string | null
           id: string
           listing_id: string
+          must_ship_before: string | null
           platform_fee: number
           seller_id: string
           seller_payout: number
           shipped_at: string | null
+          shipping_carrier: string | null
           status: string
           stripe_checkout_session_id: string | null
           stripe_payment_intent_id: string | null
@@ -550,6 +606,7 @@ export type Database = {
         }
         Insert: {
           amount: number
+          auto_cancel_reason?: string | null
           auto_release_at?: string | null
           bid_id: string
           buyer_id: string
@@ -560,10 +617,12 @@ export type Database = {
           disputed_at?: string | null
           id?: string
           listing_id: string
+          must_ship_before?: string | null
           platform_fee?: number
           seller_id: string
           seller_payout?: number
           shipped_at?: string | null
+          shipping_carrier?: string | null
           status?: string
           stripe_checkout_session_id?: string | null
           stripe_payment_intent_id?: string | null
@@ -573,6 +632,7 @@ export type Database = {
         }
         Update: {
           amount?: number
+          auto_cancel_reason?: string | null
           auto_release_at?: string | null
           bid_id?: string
           buyer_id?: string
@@ -583,10 +643,12 @@ export type Database = {
           disputed_at?: string | null
           id?: string
           listing_id?: string
+          must_ship_before?: string | null
           platform_fee?: number
           seller_id?: string
           seller_payout?: number
           shipped_at?: string | null
+          shipping_carrier?: string | null
           status?: string
           stripe_checkout_session_id?: string | null
           stripe_payment_intent_id?: string | null

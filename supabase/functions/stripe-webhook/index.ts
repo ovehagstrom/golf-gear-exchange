@@ -143,11 +143,16 @@ serve(async (req) => {
             break;
           }
 
+          // Set must_ship_before to 7 days from now
+          const mustShipBefore = new Date();
+          mustShipBefore.setDate(mustShipBefore.getDate() + 7);
+
           const { data: transaction, error: txError } = await supabaseAdmin
             .from('transactions')
             .update({
               status: 'paid',
               stripe_payment_intent_id: session.payment_intent as string,
+              must_ship_before: mustShipBefore.toISOString(),
             })
             .eq('stripe_checkout_session_id', session.id)
             .select('*, listings(title)')

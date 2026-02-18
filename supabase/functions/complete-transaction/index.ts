@@ -15,6 +15,9 @@ const getStripe = () => new Stripe(Deno.env.get("STRIPE_SECRET_KEY") || "", {
   apiVersion: "2025-08-27.basil",
 });
 
+const SHIPPING_CARRIERS = ['postnord', 'dhl', 'schenker', 'other'] as const;
+const MIN_TRACKING_LENGTH = 8;
+
 // Helper: Create transfer to seller's connected account
 async function createSellerTransfer(
   supabaseAdmin: ReturnType<typeof createClient>,
@@ -63,8 +66,6 @@ async function reverseTransferBeforeRefund(
   if (!transferId) return;
 
   const stripe = getStripe();
-
-  // Check the transfer's current state
   const transfer = await stripe.transfers.retrieve(transferId);
   const reversibleAmount = transfer.amount - (transfer.amount_reversed || 0);
 
@@ -73,7 +74,6 @@ async function reverseTransferBeforeRefund(
     return;
   }
 
-  // Create reversal with idempotency key
   const reversal = await stripe.transfers.createReversal(transferId, {
     amount: reversibleAmount,
     description: `Återkrav för order ${transaction.id}`,
@@ -82,6 +82,20 @@ async function reverseTransferBeforeRefund(
   });
 
   logStep("Transfer reversed", { reversalId: reversal.id, amount: reversibleAmount });
+}
+
+// Helper: Check if transaction has an open dispute
+async function hasOpenDispute(
+  supabaseAdmin: ReturnType<typeof createClient>,
+  transactionId: string
+): Promise<boolean> {
+  const { data } = await supabaseAdmin
+    .from('disputes')
+    .select('id')
+    .eq('transaction_id', transactionId)
+    .in('status', ['open', 'under_review'])
+    .maybeSingle();
+  return !!data;
 }
 
 serve(async (req) => {
@@ -114,7 +128,7 @@ serve(async (req) => {
     logStep("User authenticated", { userId: user.id });
 
     const body = await req.json();
-    const { transaction_id, action, tracking_number, reason } = body;
+    const { transaction_id, action, tracking_number, shipping_carrier, reason, dispute_reason, dispute_description } = body;
     
     if (!transaction_id || !action) {
       throw new Error("transaction_id and action are required");
@@ -142,16 +156,43 @@ serve(async (req) => {
         if (transaction.status !== 'paid') {
           throw new Error("Can only mark as shipped when status is paid");
         }
-        
+
+        // ── Validate tracking number (required, min 8 chars) ──
+        if (!tracking_number || tracking_number.trim().length < MIN_TRACKING_LENGTH) {
+          throw new Error(`Spårningsnummer krävs och måste vara minst ${MIN_TRACKING_LENGTH} tecken`);
+        }
+        if (!shipping_carrier || !SHIPPING_CARRIERS.includes(shipping_carrier as typeof SHIPPING_CARRIERS[number])) {
+          throw new Error(`Fraktbärare måste anges: ${SHIPPING_CARRIERS.join(', ')}`);
+        }
+
         const autoReleaseAt = new Date();
         autoReleaseAt.setDate(autoReleaseAt.getDate() + 5);
+
+        // ── Update Stripe metadata with shipping info ──
+        if (transaction.stripe_payment_intent_id) {
+          try {
+            const stripe = getStripe();
+            await stripe.paymentIntents.update(transaction.stripe_payment_intent_id, {
+              metadata: {
+                tracking_number: tracking_number.trim(),
+                shipping_carrier,
+                shipped_at: new Date().toISOString(),
+              },
+            });
+            logStep("Stripe metadata updated with tracking info");
+          } catch (stripeErr) {
+            // Non-fatal: log but don't block the shipping action
+            logStep("Warning: could not update Stripe metadata", { error: String(stripeErr) });
+          }
+        }
         
         await supabaseAdmin
           .from('transactions')
           .update({
             status: 'shipped',
             shipped_at: new Date().toISOString(),
-            tracking_number: tracking_number || null,
+            tracking_number: tracking_number.trim(),
+            shipping_carrier,
             auto_release_at: autoReleaseAt.toISOString(),
           })
           .eq('id', transaction_id);
@@ -161,12 +202,12 @@ serve(async (req) => {
           .insert({
             user_id: transaction.buyer_id,
             title: 'Varan har skickats!',
-            message: `Säljaren har skickat din vara${tracking_number ? `. Spårningsnummer: ${tracking_number}` : ''}. Bekräfta mottagandet inom 5 dagar.`,
+            message: `Säljaren har skickat din vara via ${shipping_carrier.toUpperCase()}. Spårningsnummer: ${tracking_number.trim()}. Bekräfta mottagandet inom 5 dagar.`,
             type: 'info',
             related_transaction_id: transaction_id,
           });
 
-        logStep("Marked as shipped", { auto_release_at: autoReleaseAt.toISOString() });
+        logStep("Marked as shipped", { auto_release_at: autoReleaseAt.toISOString(), tracking_number, shipping_carrier });
         break;
       }
 
@@ -176,6 +217,12 @@ serve(async (req) => {
         }
         if (!['shipped', 'paid'].includes(transaction.status)) {
           throw new Error("Invalid transaction status for delivery confirmation");
+        }
+
+        // Block if there's an open dispute
+        const disputeOpen = await hasOpenDispute(supabaseAdmin, transaction_id);
+        if (disputeOpen) {
+          throw new Error("Kan inte bekräfta leverans medan en tvist är öppen");
         }
 
         // Prevent duplicate transfer
@@ -209,7 +256,6 @@ serve(async (req) => {
 
         await supabaseAdmin.rpc('increment_completed_deals', { seller_id: transaction.seller_id });
 
-        // Update DAC7 seller annual stats
         await supabaseAdmin.rpc('update_seller_annual_stats', {
           p_seller_id: transaction.seller_id,
           p_amount: transaction.amount,
@@ -235,19 +281,63 @@ serve(async (req) => {
         if (transaction.buyer_id !== user.id) {
           throw new Error("Only the buyer can report a problem");
         }
+        if (!['shipped', 'paid'].includes(transaction.status)) {
+          throw new Error("Kan bara rapportera problem på betalda transaktioner");
+        }
 
-        const dispute_reason = reason || 'Problem reported by buyer';
+        const validReasons = ['item_not_received', 'item_not_as_described', 'item_damaged', 'seller_unresponsive', 'other'];
+        const disputeReasonValue = reason && validReasons.includes(reason) ? reason : 'other';
+        const description = dispute_description || dispute_reason || 'Problem reported by buyer';
 
+        // Build evidence package from available data
+        const evidencePackage = {
+          tracking_number: transaction.tracking_number || null,
+          shipping_carrier: transaction.shipping_carrier || null,
+          shipped_at: transaction.shipped_at || null,
+          buyer_confirmed_at: null, // Not yet confirmed
+          amount: transaction.amount,
+          listing_id: transaction.listing_id,
+          collected_at: new Date().toISOString(),
+        };
+
+        // Create structured dispute record
+        await supabaseAdmin
+          .from('disputes')
+          .insert({
+            transaction_id: transaction_id,
+            opened_by: user.id,
+            opened_by_role: 'buyer',
+            reason: disputeReasonValue,
+            description,
+            status: 'open',
+            evidence_package: evidencePackage,
+          });
+
+        // Update transaction to disputed and clear auto_release (block auto-release)
         await supabaseAdmin
           .from('transactions')
           .update({
             status: 'disputed',
             disputed_at: new Date().toISOString(),
-            dispute_reason,
+            dispute_reason: description,
+            auto_release_at: null, // Pause auto-release
           })
           .eq('id', transaction_id);
 
-        logStep("Dispute opened", { reason: dispute_reason });
+        // Notify admin (via seller notification for now)
+        await supabaseAdmin
+          .from('notifications')
+          .insert([
+            {
+              user_id: transaction.seller_id,
+              title: 'Köparen har rapporterat ett problem',
+              message: `Köparen har öppnat en tvist: ${description}. Admin kommer att kontakta dig.`,
+              type: 'error',
+              related_transaction_id: transaction_id,
+            },
+          ]);
+
+        logStep("Dispute created", { reason: disputeReasonValue, description });
         break;
       }
 
@@ -263,7 +353,6 @@ serve(async (req) => {
           throw new Error("Admin access required");
         }
 
-        // Prevent duplicate transfer
         if (transaction.stripe_transfer_id) {
           logStep("Transfer already exists for admin_release, skipping", { transferId: transaction.stripe_transfer_id });
         }
@@ -282,6 +371,7 @@ serve(async (req) => {
             status: 'completed',
             completed_at: new Date().toISOString(),
             stripe_transfer_id: adminTransferId,
+            auto_release_at: null,
           })
           .eq('id', transaction_id);
 
@@ -290,11 +380,17 @@ serve(async (req) => {
           .update({ status: 'sold' })
           .eq('id', transaction.listing_id);
 
-        // Update DAC7 seller annual stats
         await supabaseAdmin.rpc('update_seller_annual_stats', {
           p_seller_id: transaction.seller_id,
           p_amount: transaction.amount,
         });
+
+        // Resolve any open dispute
+        await supabaseAdmin
+          .from('disputes')
+          .update({ status: 'released', resolution_type: 'admin_release', admin_notes: 'Funds released by admin' })
+          .eq('transaction_id', transaction_id)
+          .in('status', ['open', 'under_review']);
 
         logStep("Admin released funds", { transferId: adminTransferId });
         break;
@@ -312,17 +408,15 @@ serve(async (req) => {
           throw new Error("Admin access required");
         }
 
-        // Prevent duplicate refund
         if (transaction.status === 'refunded') {
           throw new Error("Transaction is already refunded");
         }
 
         const stripe = getStripe();
 
-        // If a transfer was already made, reverse it first
+        // Reverse transfer if one was already made
         if (transaction.stripe_transfer_id) {
           logStep("Transfer exists, reversing before refund", { transferId: transaction.stripe_transfer_id });
-          
           try {
             await reverseTransferBeforeRefund(transaction);
             logStep("Transfer reversed successfully");
@@ -333,7 +427,7 @@ serve(async (req) => {
           }
         }
 
-        // Now refund the customer
+        // Refund the customer
         if (transaction.stripe_payment_intent_id) {
           await stripe.refunds.create({
             payment_intent: transaction.stripe_payment_intent_id,
@@ -345,14 +439,20 @@ serve(async (req) => {
 
         await supabaseAdmin
           .from('transactions')
-          .update({ status: 'refunded' })
+          .update({ status: 'refunded', auto_release_at: null })
           .eq('id', transaction_id);
 
-        // Reactivate listing
         await supabaseAdmin
           .from('listings')
           .update({ status: 'active' })
           .eq('id', transaction.listing_id);
+
+        // Resolve any open dispute
+        await supabaseAdmin
+          .from('disputes')
+          .update({ status: 'refunded', resolution_type: 'admin_refund', admin_notes: 'Refund issued by admin' })
+          .eq('transaction_id', transaction_id)
+          .in('status', ['open', 'under_review']);
 
         logStep("Admin refunded transaction (with reverse transfer if applicable)");
         break;
