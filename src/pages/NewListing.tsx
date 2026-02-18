@@ -13,6 +13,8 @@ import { supabase } from '@/integrations/supabase/client';
 import { CATEGORIES, SHAFT_FLEX, CONDITIONS, POPULAR_BRANDS, SWEDISH_CITIES } from '@/lib/constants';
 import { Loader2, Upload, X, CheckCircle2 } from 'lucide-react';
 import { useEffect } from 'react';
+import { AlertCircle } from 'lucide-react';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
 export default function NewListing() {
   const { user, loading: authLoading } = useAuth();
@@ -22,6 +24,7 @@ export default function NewListing() {
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [images, setImages] = useState<string[]>([]);
+  const [stripeOnboarded, setStripeOnboarded] = useState<boolean | null>(null);
   
   const [formData, setFormData] = useState({
     title: '',
@@ -45,6 +48,18 @@ export default function NewListing() {
   useEffect(() => {
     if (!authLoading && !user) {
       navigate('/auth');
+    } else if (user) {
+      // Check Stripe onboarding status
+      supabase
+        .from('profiles')
+        .select('stripe_connect_account_id, stripe_connect_onboarding_complete')
+        .eq('id', user.id)
+        .single()
+        .then(({ data }) => {
+          setStripeOnboarded(
+            !!(data?.stripe_connect_account_id && data?.stripe_connect_onboarding_complete)
+          );
+        });
     }
   }, [user, authLoading, navigate]);
 
@@ -165,11 +180,31 @@ export default function NewListing() {
     setLoading(false);
   };
 
-  if (authLoading) {
+  if (authLoading || stripeOnboarded === null) {
     return (
       <Layout>
         <div className="flex items-center justify-center py-20">
           <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        </div>
+      </Layout>
+    );
+  }
+
+  if (!stripeOnboarded) {
+    return (
+      <Layout>
+        <div className="container max-w-3xl py-8">
+          <Alert variant="destructive" className="mb-6">
+            <AlertCircle className="h-4 w-4" />
+            <AlertTitle>Slutför utbetalningsuppgifter för att kunna sälja</AlertTitle>
+            <AlertDescription>
+              Du måste ansluta ditt bankkonto via Stripe innan du kan publicera annonser. 
+              Detta krävs för att du ska kunna ta emot betalningar när du säljer.
+            </AlertDescription>
+          </Alert>
+          <Button onClick={() => navigate('/profile')}>
+            Gå till profil och anslut bankkonto
+          </Button>
         </div>
       </Layout>
     );
