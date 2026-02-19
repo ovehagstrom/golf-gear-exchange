@@ -29,6 +29,20 @@ export default function Listings() {
     search: searchParams.get('search') || '',
   });
 
+  // Sync filters when URL params change (e.g. clicking category links in header)
+  useEffect(() => {
+    setFilters({
+      category: searchParams.get('category') || '',
+      brand: searchParams.get('brand') || '',
+      shaftFlex: searchParams.get('flex') || '',
+      minPrice: Number(searchParams.get('minPrice')) || 0,
+      maxPrice: Number(searchParams.get('maxPrice')) || 100000,
+      condition: searchParams.get('condition') || '',
+      city: searchParams.get('city') || '',
+      search: searchParams.get('search') || '',
+    });
+  }, [searchParams.toString()]);
+
   useEffect(() => {
     fetchListings();
   }, [filters, sortBy]);
