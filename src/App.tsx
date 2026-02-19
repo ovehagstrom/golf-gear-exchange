@@ -24,6 +24,9 @@ import Privacy from "./pages/Privacy";
 import Cookies from "./pages/Cookies";
 import Disclaimer from "./pages/Disclaimer";
 import Contact from "./pages/Contact";
+import Help from "./pages/Help";
+import Safety from "./pages/Safety";
+import FAQ from "./pages/FAQ";
 
 const queryClient = new QueryClient();
 
@@ -54,6 +57,9 @@ const App = () => (
             <Route path="/cookies" element={<Cookies />} />
             <Route path="/disclaimer" element={<Disclaimer />} />
             <Route path="/contact" element={<Contact />} />
+            <Route path="/help" element={<Help />} />
+            <Route path="/safety" element={<Safety />} />
+            <Route path="/faq" element={<FAQ />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>

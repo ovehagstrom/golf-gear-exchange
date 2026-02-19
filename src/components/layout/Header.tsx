@@ -175,6 +175,12 @@ export function Header() {
                     </Link>
                   </Button>
                   <Button variant="ghost" asChild className="justify-start">
+                    <Link to="/my-listings" onClick={() => setMobileMenuOpen(false)}>
+                      <ShoppingBag className="h-4 w-4 mr-2" />
+                      Mina annonser
+                    </Link>
+                  </Button>
+                  <Button variant="ghost" asChild className="justify-start">
                     <Link to="/my-bids" onClick={() => setMobileMenuOpen(false)}>
                       <Gavel className="h-4 w-4 mr-2" />
                       Mina bud
