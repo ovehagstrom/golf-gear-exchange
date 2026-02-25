@@ -74,12 +74,6 @@ export function ListingCard({ listing }: ListingCardProps) {
           {/* Status badge */}
           <div className="absolute top-3 left-3 flex gap-2">
             {getStatusBadge()}
-            {listing.is_spec_verified && (
-              <Badge className="golf-badge-spec">
-                <CheckCircle2 className="h-3 w-3" />
-                Specad
-              </Badge>
-            )}
           </div>
 
           {/* Category badge */}

@@ -233,15 +233,6 @@ export default function ListingDetail() {
                 </div>
               )}
 
-              {/* Badges */}
-              <div className="absolute top-4 left-4 flex gap-2">
-                {listing.is_spec_verified && (
-                  <Badge className="golf-badge-spec">
-                    <CheckCircle2 className="h-3 w-3" />
-                    Golf-spec verifierad
-                  </Badge>
-                )}
-              </div>
             </div>
 
             {/* Thumbnail Strip */}
