@@ -14,6 +14,7 @@ import { useToast } from '@/hooks/use-toast';
 import { getStatusInfo } from '@/lib/transactionStatus';
 import { ProductionChecklist } from '@/components/admin/ProductionChecklist';
 import { ReportsModeration } from '@/components/admin/ReportsModeration';
+import { ExternalSellerListings } from '@/components/admin/ExternalSellerListings';
 import { PublicProfile } from '@/lib/types';
 import { 
   Loader2, 
@@ -28,6 +29,7 @@ import {
   Clock,
   Flag,
   Rocket,
+  UserPlus,
 } from 'lucide-react';
 
 type TransactionWithDetails = Tables<'transactions'> & {
@@ -269,6 +271,10 @@ export default function Admin() {
               <Flag className="h-4 w-4" />
               Rapporter
             </TabsTrigger>
+            <TabsTrigger value="external" className="flex items-center gap-2">
+              <UserPlus className="h-4 w-4" />
+              Externa säljare
+            </TabsTrigger>
             <TabsTrigger value="disputes" className="flex items-center gap-2">
               <AlertTriangle className="h-4 w-4" />
               Tvister ({disputes.length})
@@ -293,6 +299,10 @@ export default function Admin() {
 
           <TabsContent value="reports">
             <ReportsModeration />
+          </TabsContent>
+
+          <TabsContent value="external">
+            <ExternalSellerListings />
           </TabsContent>
 
           <TabsContent value="disputes" className="space-y-4">
