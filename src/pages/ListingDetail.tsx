@@ -30,6 +30,7 @@ import {
 
 type ListingWithProfile = Tables<'listings'> & {
   profiles: PublicProfile | null;
+  external_seller_id?: string | null;
 };
 
 export default function ListingDetail() {
@@ -390,36 +391,59 @@ export default function ListingDetail() {
 
                 {/* Seller Info */}
                 <div className="border-t pt-6">
-                  <div className="flex items-center gap-3">
-                    <Avatar className="h-12 w-12">
-                      <AvatarFallback className="bg-primary/10 text-primary">
-                        {listing.profiles?.full_name?.charAt(0) || 'S'}
-                      </AvatarFallback>
-                    </Avatar>
-                    <div className="flex-1">
-                      <p className="font-medium">{listing.profiles?.full_name || 'Säljare'}</p>
-                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                        {sellerType && <span>{sellerType.label}</span>}
-                        {listing.profiles?.is_verified && (
+                  {listing.external_seller_id ? (
+                    // External seller - show platform-verified label
+                    <div className="flex items-center gap-3">
+                      <Avatar className="h-12 w-12">
+                        <AvatarFallback className="bg-primary/10 text-primary">
+                          GM
+                        </AvatarFallback>
+                      </Avatar>
+                      <div className="flex-1">
+                        <p className="font-medium">Verifierad privatperson</p>
+                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
                           <Badge variant="outline" className="text-xs">
                             <Shield className="h-3 w-3 mr-1" />
-                            Verifierad
+                            Säljs via GolfMarket
                           </Badge>
-                        )}
+                        </div>
                       </div>
                     </div>
-                    {user && user.id !== listing.user_id && (
-                      <UserActionsMenu 
-                        userId={listing.user_id} 
-                        userName={listing.profiles?.full_name || undefined}
-                      />
-                    )}
-                  </div>
+                  ) : (
+                    // Regular seller
+                    <>
+                      <div className="flex items-center gap-3">
+                        <Avatar className="h-12 w-12">
+                          <AvatarFallback className="bg-primary/10 text-primary">
+                            {listing.profiles?.full_name?.charAt(0) || 'S'}
+                          </AvatarFallback>
+                        </Avatar>
+                        <div className="flex-1">
+                          <p className="font-medium">{listing.profiles?.full_name || 'Säljare'}</p>
+                          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                            {sellerType && <span>{sellerType.label}</span>}
+                            {listing.profiles?.is_verified && (
+                              <Badge variant="outline" className="text-xs">
+                                <Shield className="h-3 w-3 mr-1" />
+                                Verifierad
+                              </Badge>
+                            )}
+                          </div>
+                        </div>
+                        {user && user.id !== listing.user_id && (
+                          <UserActionsMenu 
+                            userId={listing.user_id} 
+                            userName={listing.profiles?.full_name || undefined}
+                          />
+                        )}
+                      </div>
 
-                  {listing.profiles && (
-                    <div className="flex items-center gap-4 mt-4 text-sm text-muted-foreground">
-                      <span>{listing.profiles.completed_deals || 0} genomförda affärer</span>
-                    </div>
+                      {listing.profiles && (
+                        <div className="flex items-center gap-4 mt-4 text-sm text-muted-foreground">
+                          <span>{listing.profiles.completed_deals || 0} genomförda affärer</span>
+                        </div>
+                      )}
+                    </>
                   )}
                 </div>
 

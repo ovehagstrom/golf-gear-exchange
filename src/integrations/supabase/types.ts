@@ -181,6 +181,42 @@ export type Database = {
           },
         ]
       }
+      external_sellers: {
+        Row: {
+          city: string
+          converted_user_id: string | null
+          created_at: string
+          created_by: string
+          email: string | null
+          id: string
+          name: string
+          phone: string | null
+          updated_at: string
+        }
+        Insert: {
+          city: string
+          converted_user_id?: string | null
+          created_at?: string
+          created_by: string
+          email?: string | null
+          id?: string
+          name: string
+          phone?: string | null
+          updated_at?: string
+        }
+        Update: {
+          city?: string
+          converted_user_id?: string | null
+          created_at?: string
+          created_by?: string
+          email?: string | null
+          id?: string
+          name?: string
+          phone?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       listings: {
         Row: {
           bounce: string | null
@@ -190,6 +226,7 @@ export type Database = {
           condition: number
           created_at: string | null
           description: string | null
+          external_seller_id: string | null
           grip: string | null
           id: string
           images: string[] | null
@@ -215,6 +252,7 @@ export type Database = {
           condition: number
           created_at?: string | null
           description?: string | null
+          external_seller_id?: string | null
           grip?: string | null
           id?: string
           images?: string[] | null
@@ -240,6 +278,7 @@ export type Database = {
           condition?: number
           created_at?: string | null
           description?: string | null
+          external_seller_id?: string | null
           grip?: string | null
           id?: string
           images?: string[] | null
@@ -258,6 +297,13 @@ export type Database = {
           year?: number | null
         }
         Relationships: [
+          {
+            foreignKeyName: "listings_external_seller_id_fkey"
+            columns: ["external_seller_id"]
+            isOneToOne: false
+            referencedRelation: "external_sellers"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "listings_user_id_fkey"
             columns: ["user_id"]
