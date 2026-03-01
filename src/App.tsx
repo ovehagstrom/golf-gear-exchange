@@ -27,6 +27,7 @@ import Contact from "./pages/Contact";
 import Help from "./pages/Help";
 import Safety from "./pages/Safety";
 import FAQ from "./pages/FAQ";
+import SubmitListing from "./pages/SubmitListing";
 
 const queryClient = new QueryClient();
 
@@ -60,6 +61,7 @@ const App = () => (
             <Route path="/help" element={<Help />} />
             <Route path="/safety" element={<Safety />} />
             <Route path="/faq" element={<FAQ />} />
+            <Route path="/submit" element={<SubmitListing />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>
