@@ -17,3 +17,6 @@ verify_jwt = false
 
 [functions.create-connect-login-link]
 verify_jwt = false
+
+[functions.submit-external-listing]
+verify_jwt = false
