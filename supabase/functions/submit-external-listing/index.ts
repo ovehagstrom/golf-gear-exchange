@@ -19,9 +19,10 @@ Deno.serve(async (req) => {
     const formData = await req.formData()
 
     const sellerName = formData.get('sellerName') as string
-    const sellerEmail = formData.get('sellerEmail') as string | null
+    const sellerEmail = formData.get('sellerEmail') as string
     const sellerPhone = formData.get('sellerPhone') as string | null
     const sellerCity = formData.get('sellerCity') as string
+    const password = formData.get('password') as string
     const title = formData.get('title') as string
     const category = formData.get('category') as string
     const brand = formData.get('brand') as string
@@ -39,8 +40,15 @@ Deno.serve(async (req) => {
     const description = formData.get('description') as string | null
 
     // Validate required fields
-    if (!sellerName || !sellerCity || !category || !brand || !model || !condition || !price) {
+    if (!sellerName || !sellerEmail || !password || !sellerCity || !category || !brand || !model || !condition || !price) {
       return new Response(JSON.stringify({ error: 'Obligatoriska fält saknas' }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }
+
+    if (password.length < 6) {
+      return new Response(JSON.stringify({ error: 'Lösenordet måste vara minst 6 tecken' }), {
         status: 400,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       })
@@ -61,10 +69,51 @@ Deno.serve(async (req) => {
       })
     }
 
+    // Check if user already exists
+    const { data: existingUsers } = await supabase.auth.admin.listUsers()
+    const existingUser = existingUsers?.users?.find(u => u.email === sellerEmail)
+
+    let userId: string
+
+    if (existingUser) {
+      userId = existingUser.id
+    } else {
+      // Create user account
+      const { data: newUser, error: userError } = await supabase.auth.admin.createUser({
+        email: sellerEmail,
+        password: password,
+        email_confirm: true,
+        user_metadata: {
+          full_name: sellerName,
+        },
+      })
+
+      if (userError || !newUser.user) {
+        console.error('Error creating user:', userError)
+        return new Response(JSON.stringify({ error: 'Kunde inte skapa konto: ' + (userError?.message || 'Okänt fel') }), {
+          status: 500,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        })
+      }
+
+      userId = newUser.user.id
+
+      // Update profile with phone and city
+      await supabase
+        .from('profiles')
+        .update({
+          phone: sellerPhone || null,
+          city: sellerCity,
+          full_name: sellerName,
+        })
+        .eq('id', userId)
+    }
+
+    // Upload images
     const imageUrls: string[] = []
     for (const file of imageFiles) {
       const fileExt = file.name.split('.').pop()
-      const fileName = `external/${Date.now()}-${Math.random().toString(36).substr(2, 9)}.${fileExt}`
+      const fileName = `${userId}/${Date.now()}-${Math.random().toString(36).substr(2, 9)}.${fileExt}`
 
       const { error: uploadError } = await supabase.storage
         .from('listing-images')
@@ -89,66 +138,11 @@ Deno.serve(async (req) => {
       })
     }
 
-    // Find or create external seller
-    let externalSellerId: string
-
-    // We need an admin user_id as the "created_by" for external sellers
-    // Use the first admin we find
-    const { data: adminRole } = await supabase
-      .from('user_roles')
-      .select('user_id')
-      .eq('role', 'admin')
-      .limit(1)
-      .single()
-
-    if (!adminRole) {
-      return new Response(JSON.stringify({ error: 'Ingen admin hittades i systemet' }), {
-        status: 500,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      })
-    }
-
-    const adminUserId = adminRole.user_id
-
-    // Check if external seller already exists by name+city
-    const { data: existingSeller } = await supabase
-      .from('external_sellers')
-      .select('id')
-      .eq('name', sellerName)
-      .eq('city', sellerCity)
-      .maybeSingle()
-
-    if (existingSeller) {
-      externalSellerId = existingSeller.id
-    } else {
-      const { data: newSeller, error: sellerError } = await supabase
-        .from('external_sellers')
-        .insert({
-          name: sellerName,
-          email: sellerEmail || null,
-          phone: sellerPhone || null,
-          city: sellerCity,
-          created_by: adminUserId,
-        })
-        .select('id')
-        .single()
-
-      if (sellerError || !newSeller) {
-        console.error('Error creating external seller:', sellerError)
-        return new Response(JSON.stringify({ error: 'Kunde inte skapa säljarprofil' }), {
-          status: 500,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        })
-      }
-      externalSellerId = newSeller.id
-    }
-
-    // Create listing under admin user with external_seller_id
+    // Create listing under the user's own account
     const { data: listing, error: listingError } = await supabase
       .from('listings')
       .insert({
-        user_id: adminUserId,
-        external_seller_id: externalSellerId,
+        user_id: userId,
         title: title || `${brand} ${model}`,
         category,
         brand,
@@ -178,7 +172,11 @@ Deno.serve(async (req) => {
       })
     }
 
-    return new Response(JSON.stringify({ success: true, listingId: listing.id }), {
+    return new Response(JSON.stringify({ 
+      success: true, 
+      listingId: listing.id,
+      accountCreated: !existingUser,
+    }), {
       status: 200,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     })

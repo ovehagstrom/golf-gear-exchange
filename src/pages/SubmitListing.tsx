@@ -5,22 +5,24 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Checkbox } from '@/components/ui/checkbox';
 import { CATEGORIES, SHAFT_FLEX, CONDITIONS, POPULAR_BRANDS, SWEDISH_CITIES } from '@/lib/constants';
 import { Loader2, Upload, X, CheckCircle2 } from 'lucide-react';
-import { supabase } from '@/integrations/supabase/client';
+import { Link } from 'react-router-dom';
 
 export default function SubmitListing() {
   const [loading, setLoading] = useState(false);
-  const [uploading, setUploading] = useState(false);
   const [imageFiles, setImageFiles] = useState<File[]>([]);
   const [imagePreviews, setImagePreviews] = useState<string[]>([]);
   const [submitted, setSubmitted] = useState(false);
+  const [termsAccepted, setTermsAccepted] = useState(false);
 
   const [formData, setFormData] = useState({
     sellerName: '',
     sellerEmail: '',
     sellerPhone: '',
     sellerCity: '',
+    password: '',
     title: '',
     category: '',
     brand: '',
@@ -71,7 +73,7 @@ export default function SubmitListing() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (imageFiles.length < 3) return;
+    if (imageFiles.length < 3 || !termsAccepted) return;
 
     setLoading(true);
 
@@ -80,6 +82,7 @@ export default function SubmitListing() {
     fd.append('sellerEmail', formData.sellerEmail);
     fd.append('sellerPhone', formData.sellerPhone);
     fd.append('sellerCity', formData.sellerCity);
+    fd.append('password', formData.password);
     fd.append('title', formData.title || `${formData.brand} ${formData.model}`);
     fd.append('category', formData.category);
     fd.append('brand', formData.brand);
@@ -133,7 +136,9 @@ export default function SubmitListing() {
             <CheckCircle2 className="h-16 w-16 text-primary mx-auto" />
             <h2 className="text-2xl font-bold">Tack!</h2>
             <p className="text-muted-foreground">
-              Din annons har skickats in och kommer att publiceras på GolfMarket.
+              Din annons har publicerats på GolfMarket och ett konto har skapats åt dig.
+              Du kan logga in med din e-post och lösenord på{' '}
+              <a href="https://golfmarket.store" className="text-primary underline">golfmarket.store</a>.
             </p>
           </CardContent>
         </Card>
@@ -147,16 +152,16 @@ export default function SubmitListing() {
         <div className="mb-8 text-center">
           <h1 className="text-3xl font-bold">Lägg upp din annons på GolfMarket</h1>
           <p className="text-muted-foreground mt-2">
-            Fyll i formuläret nedan så publiceras din annons automatiskt
+            Fyll i formuläret nedan så publiceras din annons automatiskt och du får ett konto
           </p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-8">
-          {/* Seller Info */}
+          {/* Account & Seller Info */}
           <Card>
             <CardHeader>
-              <CardTitle className="text-lg">Dina uppgifter</CardTitle>
-              <CardDescription>Kontaktuppgifter så vi kan nå dig</CardDescription>
+              <CardTitle className="text-lg">Dina uppgifter & konto</CardTitle>
+              <CardDescription>Vi skapar ett konto åt dig så du kan hantera din annons</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid gap-4 sm:grid-cols-2">
@@ -187,7 +192,7 @@ export default function SubmitListing() {
               </div>
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-2">
-                  <Label htmlFor="sellerEmail">E-post</Label>
+                  <Label htmlFor="sellerEmail">E-post *</Label>
                   <Input
                     id="sellerEmail"
                     name="sellerEmail"
@@ -195,18 +200,32 @@ export default function SubmitListing() {
                     value={formData.sellerEmail}
                     onChange={handleChange}
                     placeholder="din@email.se"
+                    required
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="sellerPhone">Telefon</Label>
+                  <Label htmlFor="password">Lösenord *</Label>
                   <Input
-                    id="sellerPhone"
-                    name="sellerPhone"
-                    value={formData.sellerPhone}
+                    id="password"
+                    name="password"
+                    type="password"
+                    value={formData.password}
                     onChange={handleChange}
-                    placeholder="07X-XXX XX XX"
+                    placeholder="Minst 6 tecken"
+                    required
+                    minLength={6}
                   />
                 </div>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="sellerPhone">Telefon</Label>
+                <Input
+                  id="sellerPhone"
+                  name="sellerPhone"
+                  value={formData.sellerPhone}
+                  onChange={handleChange}
+                  placeholder="07X-XXX XX XX"
+                />
               </div>
             </CardContent>
           </Card>
@@ -390,9 +409,24 @@ export default function SubmitListing() {
             </CardContent>
           </Card>
 
-          <Button type="submit" className="w-full" disabled={loading || imageFiles.length < 3}>
+          {/* Terms */}
+          <div className="flex items-start gap-3 px-1">
+            <Checkbox
+              id="terms"
+              checked={termsAccepted}
+              onCheckedChange={(checked) => setTermsAccepted(checked === true)}
+            />
+            <label htmlFor="terms" className="text-sm leading-relaxed cursor-pointer">
+              Jag godkänner{' '}
+              <Link to="/terms" target="_blank" className="text-primary underline">användarvillkoren</Link>
+              {' '}och{' '}
+              <Link to="/privacy" target="_blank" className="text-primary underline">integritetspolicyn</Link>
+            </label>
+          </div>
+
+          <Button type="submit" className="w-full" disabled={loading || imageFiles.length < 3 || !termsAccepted}>
             {loading && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-            Skicka in annons
+            Skicka in annons & skapa konto
           </Button>
         </form>
       </div>
