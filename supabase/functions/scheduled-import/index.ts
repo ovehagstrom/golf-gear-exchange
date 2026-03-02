@@ -254,18 +254,49 @@ async function fetchTradera(): Promise<ExternalListingInput[]> {
   const TIMEOUT_MS = 15_000
   const results: ExternalListingInput[] = []
 
-  const url = 'https://www.tradera.com/search?q=golf+driver&categoryId=302037&sortBy=AddedOn'
-  console.log(`[Tradera] Fetching from: ${url}`)
+  // Tradera internal POST API (discovered from tradera_api Python package)
+  const apiUrl = 'https://www.tradera.com/api/webapi/discover/web/independent-search'
+  const params = new URLSearchParams({
+    query: 'golf driver',
+    sortBy: 'AddedOn',
+    categoryId: '25', // sport_fritid
+    itemStatus: 'unsold',
+    itemType: 'All',
+    automaticTranslationPreferred: 'true',
+    forceKeywordSearch: 'false',
+    includeFilters: 'false',
+    languageCodeIso2: 'sv',
+    searchTypeVariantHint: 'enrichemptysearchresult',
+    shippingCountryCodeIso2: 'SE',
+  })
+
+  const url = `${apiUrl}?${params.toString()}`
+  console.log(`[Tradera] Fetching from API: ${url}`)
 
   try {
     const controller = new AbortController()
     const timer = setTimeout(() => controller.abort(), TIMEOUT_MS)
 
-    const response = await fetch(url, {
+    // First do a GET to the homepage to get cookies (required by Tradera)
+    const initResponse = await fetch('https://www.tradera.com/', {
       signal: controller.signal,
       headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Accept': 'text/html,application/xhtml+xml',
+      },
+    })
+    await initResponse.text() // consume body
+
+    const cookies = initResponse.headers.get('set-cookie') || ''
+
+    const response = await fetch(url, {
+      method: 'POST',
+      signal: controller.signal,
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+        'Cookie': cookies,
+        'Referer': 'https://www.tradera.com/search?q=golf+driver',
       },
     })
     clearTimeout(timer)
@@ -278,73 +309,48 @@ async function fetchTradera(): Promise<ExternalListingInput[]> {
       return []
     }
 
-    const html = await response.text()
+    const data = await response.json()
+    
+    // The API returns items in various possible structures
+    const items = data?.items || data?.searchResult?.items || data?.result?.items || []
+    console.log(`[Tradera] API returned ${items.length} items`)
 
-    // Try to extract JSON data from Next.js __NEXT_DATA__ or inline scripts
-    const nextDataMatch = html.match(/<script id="__NEXT_DATA__"[^>]*>([\s\S]*?)<\/script>/)
-    if (nextDataMatch) {
+    // Also check if data itself is an array
+    const itemList = Array.isArray(data) ? data : items
+
+    for (const item of itemList) {
       try {
-        const nextData = JSON.parse(nextDataMatch[1])
-        const items = nextData?.props?.pageProps?.searchResult?.items ||
-                      nextData?.props?.pageProps?.items || []
-        console.log(`[Tradera] Found ${items.length} items via __NEXT_DATA__`)
+        const id = item.id?.toString() || item.itemId?.toString()
+        const title = item.shortDescription || item.title || item.heading
+        if (!id || !title) continue
 
-        for (const item of items) {
-          const id = item.id?.toString() || item.itemId?.toString()
-          const title = item.shortDescription || item.title || item.heading
-          if (!id || !title) continue
+        const price = item.currentBid || item.buyNowPrice || item.price || item.nextBid || undefined
+        const imageUrl = item.imageUrl || item.thumbnailUrl || item.mainImageUrl
+        const itemUrl = item.itemUrl || item.url || `/item/${id}`
 
-          const price = item.currentBid || item.buyNowPrice || item.price || undefined
-          const imageUrl = item.imageUrl || item.thumbnailUrl
-          const itemUrl = item.itemUrl || `/item/${id}`
-
-          results.push({
-            source: 'tradera',
-            source_id: id,
-            title,
-            price: price ? Math.round(Number(price)) : undefined,
-            city: undefined,
-            source_url: itemUrl.startsWith('http') ? itemUrl : `https://www.tradera.com${itemUrl}`,
-            image_urls: imageUrl ? [imageUrl] : [],
-            description: item.description || undefined,
-            published_at: item.startDate || item.created || undefined,
-            category: 'Drivers',
-          })
-        }
-      } catch (parseErr) {
-        console.warn('[Tradera] Failed to parse __NEXT_DATA__:', parseErr)
+        results.push({
+          source: 'tradera',
+          source_id: id,
+          title,
+          price: price ? Math.round(Number(price)) : undefined,
+          city: undefined,
+          source_url: itemUrl.startsWith('http') ? itemUrl : `https://www.tradera.com${itemUrl}`,
+          image_urls: imageUrl ? [imageUrl] : [],
+          description: item.description || undefined,
+          published_at: item.startDate || item.created || undefined,
+          category: 'Drivers',
+        })
+      } catch (itemErr) {
+        console.warn(`[Tradera] Item parse error:`, itemErr)
       }
     }
 
-    // Fallback: try to extract from structured data or og tags
+    // If no items found via API, log the response structure for debugging
     if (results.length === 0) {
-      const jsonLdMatches = html.matchAll(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/g)
-      for (const m of jsonLdMatches) {
-        try {
-          const ld = JSON.parse(m[1])
-          if (ld['@type'] === 'ItemList' && ld.itemListElement) {
-            for (const elem of ld.itemListElement) {
-              const item = elem.item || elem
-              if (!item.name || !item.url) continue
-              const idMatch = item.url.match(/\/(\d+)/)
-              results.push({
-                source: 'tradera',
-                source_id: idMatch ? idMatch[1] : item.url,
-                title: item.name,
-                price: item.offers?.price ? Math.round(Number(item.offers.price)) : undefined,
-                city: undefined,
-                source_url: item.url.startsWith('http') ? item.url : `https://www.tradera.com${item.url}`,
-                image_urls: item.image ? [item.image] : [],
-                description: item.description || undefined,
-                category: 'Drivers',
-              })
-            }
-          }
-        } catch { /* skip invalid json-ld */ }
-      }
+      const keys = Object.keys(data || {})
+      console.log(`[Tradera] Response keys: ${keys.join(', ')}`)
+      console.log(`[Tradera] Response preview: ${JSON.stringify(data).substring(0, 500)}`)
     }
-
-    console.log(`[Tradera] Extracted ${results.length} ads`)
   } catch (err) {
     if (err instanceof DOMException && err.name === 'AbortError') {
       console.error(`[Tradera] Request timed out after ${TIMEOUT_MS}ms`)
@@ -353,6 +359,7 @@ async function fetchTradera(): Promise<ExternalListingInput[]> {
     }
   }
 
+  console.log(`[Tradera] Extracted ${results.length} ads`)
   return results
 }
 
