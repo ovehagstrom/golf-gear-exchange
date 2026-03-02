@@ -81,140 +81,106 @@ function extractFirstImage(itemXml: string): string[] {
 }
 
 /**
- * Blocket RSS fetcher — tries multiple known RSS URLs.
- * DEBUG MODE: date filtering disabled to verify parsing works.
+ * Blocket fetcher — uses Blocket's internal JSON search API.
+ * No RSS available; this calls the same endpoint as blocket.se's frontend.
  */
 async function fetchBlocket(): Promise<ExternalListingInput[]> {
-  // Try multiple possible RSS URLs since Blocket changes these periodically
-  const RSS_URLS = [
-    'https://www.blocket.se/rss?q=golf&cg=6060', // sport & fritid category
-    'https://www.blocket.se/rss?q=golfklubbor',
-    'https://www.blocket.se/rss/hela_sverige?q=golf&cg=6060',
-    'https://www.blocket.se/rss/sport_fritid_hobby?q=golf',
-  ]
+  const API_URL = 'https://www.blocket.se/recommerce/forsale/search/api/search/SEARCH_ID_BAP_COMMON'
   const TIMEOUT_MS = 15_000
   const results: ExternalListingInput[] = []
 
-  let xml: string | null = null
-  let usedUrl = ''
+  // Search for golf equipment in "Sport & Fritid" category (0.86 = Fritid, Hobby & Underhållning)
+  const params = new URLSearchParams({
+    q: 'golf',
+    lim: '40',
+    sort: 'PUBLISHED_DESC',
+    category: '0.86',
+  })
 
-  for (const url of RSS_URLS) {
-    console.log(`[Blocket] Trying RSS URL: ${url}`)
-    try {
-      const controller = new AbortController()
-      const timer = setTimeout(() => controller.abort(), TIMEOUT_MS)
+  const url = `${API_URL}?${params.toString()}`
+  console.log(`[Blocket] Fetching from API: ${url}`)
 
-      const response = await fetch(url, {
-        signal: controller.signal,
-        headers: { 'User-Agent': 'GolfMarket-Aggregator/1.0' },
-      })
-      clearTimeout(timer)
+  try {
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), TIMEOUT_MS)
 
-      console.log(`[Blocket] HTTP ${response.status} from ${url}`)
-      console.log(`[Blocket] Content-Type: ${response.headers.get('content-type')}`)
+    const response = await fetch(url, {
+      signal: controller.signal,
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (compatible; GolfMarket/1.0)',
+        'Accept': 'application/json',
+      },
+    })
+    clearTimeout(timer)
 
-      if (!response.ok) continue
+    console.log(`[Blocket] HTTP ${response.status}`)
+    console.log(`[Blocket] Content-Type: ${response.headers.get('content-type')}`)
 
-      const text = await response.text()
-      console.log(`[Blocket] Received ${text.length} bytes`)
-      console.log(`[Blocket] First 500 chars: ${text.substring(0, 500)}`)
+    if (!response.ok) {
+      const body = await response.text().catch(() => '')
+      console.error(`[Blocket] API error ${response.status}: ${body.substring(0, 300)}`)
+      return []
+    }
 
-      // Verify it looks like RSS/XML
-      if (text.includes('<item') || text.includes('<entry') || text.includes('<rss')) {
-        xml = text
-        usedUrl = url
-        console.log(`[Blocket] ✓ Valid RSS found at ${url}`)
-        break
-      } else {
-        console.warn(`[Blocket] Response from ${url} does not look like RSS, trying next...`)
-      }
-    } catch (err) {
-      if (err instanceof DOMException && err.name === 'AbortError') {
-        console.error(`[Blocket] Timeout after ${TIMEOUT_MS}ms for ${url}`)
-      } else {
-        console.error(`[Blocket] Fetch error for ${url}:`, err)
+    const data = await response.json()
+
+    const ads = data?.docs || data?.data || []
+    console.log(`[Blocket] API returned ${ads.length} ads (num_results: ${data?.metadata?.num_results ?? 'unknown'})`)
+
+    if (ads.length === 0) {
+      console.warn('[Blocket] API returned 0 ads — response keys:', Object.keys(data).join(', '))
+      console.log(`[Blocket] Response preview: ${JSON.stringify(data).substring(0, 500)}`)
+      return []
+    }
+
+    for (let i = 0; i < ads.length; i++) {
+      try {
+        const ad = ads[i]
+
+        const id = ad.id || ad.ad_id?.toString()
+        const heading = ad.heading || ad.title
+        const canonicalUrl = ad.canonical_url
+          ? (ad.canonical_url.startsWith('http') ? ad.canonical_url : `https://www.blocket.se${ad.canonical_url}`)
+          : `https://www.blocket.se/annons/${id}`
+
+        if (!id || !heading) {
+          console.warn(`[Blocket] Ad ${i + 1} skipped: missing id or heading`)
+          continue
+        }
+
+        const price = ad.price?.amount || undefined
+        const location = ad.location || undefined
+        const imageUrls = ad.image_urls?.length ? ad.image_urls : (ad.image?.url ? [ad.image.url] : [])
+        const timestamp = ad.timestamp ? new Date(ad.timestamp * 1000).toISOString() : undefined
+
+        console.log(`[Blocket] Ad ${i + 1}: "${heading.substring(0, 50)}" — ${price ?? 'no price'} SEK — ${location ?? 'no location'}`)
+
+        results.push({
+          source: 'blocket',
+          source_id: id.toString(),
+          title: heading,
+          price,
+          city: location,
+          source_url: canonicalUrl,
+          image_urls: imageUrls,
+          description: undefined, // Not available in search results
+          published_at: timestamp,
+          category: 'golf',
+        })
+      } catch (itemErr) {
+        console.warn(`[Blocket] Ad ${i + 1} parse error:`, itemErr)
       }
     }
-  }
-
-  if (!xml) {
-    console.error('[Blocket] All RSS URLs failed — no valid feed found')
-    // Return special marker so the caller can log this in external_import_logs
+  } catch (err) {
+    if (err instanceof DOMException && err.name === 'AbortError') {
+      console.error(`[Blocket] Request timed out after ${TIMEOUT_MS}ms`)
+    } else {
+      console.error('[Blocket] Fetch error:', err)
+    }
     return []
   }
 
-  console.log(`[Blocket] Using feed from: ${usedUrl}`)
-
-  // Split into <item> blocks (also handle <entry> for Atom feeds)
-  let itemBlocks = xml.split(/<item[\s>]/).slice(1)
-  if (itemBlocks.length === 0) {
-    itemBlocks = xml.split(/<entry[\s>]/).slice(1)
-  }
-
-  console.log(`[Blocket] Found ${itemBlocks.length} items in feed`)
-
-  if (itemBlocks.length === 0) {
-    console.warn('[Blocket] Feed parsed successfully but contains 0 items')
-    console.log(`[Blocket] Feed structure preview (tags found): ${
-      [...xml.matchAll(/<(\w+)[\s>]/g)].map(m => m[1]).filter((v, i, a) => a.indexOf(v) === i).join(', ')
-    }`)
-    return []
-  }
-
-  let parsedCount = 0
-  let skippedCount = 0
-
-  for (let i = 0; i < itemBlocks.length; i++) {
-    const block = itemBlocks[i]
-    try {
-      const title = getTagContent(block, 'title')
-      const link = getTagContent(block, 'link')
-      const description = getTagContent(block, 'description') ?? getTagContent(block, 'content')
-      const pubDate = getTagContent(block, 'pubDate') ?? getTagContent(block, 'published') ?? getTagContent(block, 'updated')
-
-      console.log(`[Blocket] Item ${i + 1}: title="${title?.substring(0, 60)}", link="${link?.substring(0, 80)}", pubDate="${pubDate}"`)
-
-      if (!title || !link) {
-        console.warn(`[Blocket] Item ${i + 1} skipped: missing title or link`)
-        skippedCount++
-        continue
-      }
-
-      // DEBUG: date filtering DISABLED — accepting all items
-      // TODO: re-enable after verifying parsing works
-      console.log(`[Blocket] Item ${i + 1}: DATE FILTER DISABLED — including item regardless of date`)
-
-      const idMatch = link.match(/(\d{8,})/)
-      const sourceId = idMatch ? idMatch[1] : hashSourceId(link)
-
-      const price = extractPrice(title) ?? (description ? extractPrice(description) : undefined)
-
-      const locationMatch = block.match(/<blocket:location[^>]*>([^<]+)/i)
-        ?? block.match(/<geo:(?:name|locality)[^>]*>([^<]+)/i)
-      const city = locationMatch ? locationMatch[1].trim() : undefined
-
-      const imageUrls = extractFirstImage(block)
-
-      results.push({
-        source: 'blocket',
-        source_id: sourceId,
-        title,
-        price,
-        city,
-        source_url: link,
-        image_urls: imageUrls,
-        description: description ?? undefined,
-        published_at: pubDate ? new Date(pubDate).toISOString() : undefined,
-        category: 'golf',
-      })
-      parsedCount++
-    } catch (itemErr) {
-      console.warn(`[Blocket] Item ${i + 1} error:`, itemErr)
-      skippedCount++
-    }
-  }
-
-  console.log(`[Blocket] Summary: ${parsedCount} parsed, ${skippedCount} skipped, ${results.length} total results`)
+  console.log(`[Blocket] Summary: ${results.length} valid ads fetched`)
   return results
 }
 
