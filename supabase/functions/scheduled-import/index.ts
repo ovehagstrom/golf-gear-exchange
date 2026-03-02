@@ -158,10 +158,9 @@ async function fetchBlocket(): Promise<ExternalListingInput[]> {
   const results: ExternalListingInput[] = []
 
   const params = new URLSearchParams({
-    q: 'driver golf',
+    q: 'golf driver',
     lim: '40',
     sort: 'PUBLISHED_DESC',
-    category: '0.86', // Sport & Fritid → Golf
   })
 
   const url = `${API_URL}?${params.toString()}`
