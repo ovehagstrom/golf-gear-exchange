@@ -333,13 +333,15 @@ async function fetchTradera(): Promise<ExternalListingInput[]> {
         const price = item.price || item.buyNowPrice || undefined
         
         // Tradera uses imageUrlTemplate with {format} placeholder
-        // Replace with a reasonable size format
+        // Use Tradera's Next.js image proxy for reliable URLs
         const imageUrls: string[] = []
         if (item.imageUrlTemplate) {
-          imageUrls.push(item.imageUrlTemplate.replace('{format}', '800'))
+          const rawUrl = item.imageUrlTemplate.replace('{format}', 'item-img-2')
+          imageUrls.push(`https://www.tradera.com/_next/image?url=${encodeURIComponent(rawUrl)}&w=640&q=75`)
         }
         if (item.imageSecondaryUrlTemplate) {
-          imageUrls.push(item.imageSecondaryUrlTemplate.replace('{format}', '800'))
+          const rawUrl2 = item.imageSecondaryUrlTemplate.replace('{format}', 'item-img-2')
+          imageUrls.push(`https://www.tradera.com/_next/image?url=${encodeURIComponent(rawUrl2)}&w=640&q=75`)
         }
         
         const itemUrl = item.itemUrl || `/item/${id}`
