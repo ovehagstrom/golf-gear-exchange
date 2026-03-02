@@ -23,3 +23,6 @@ verify_jwt = false
 
 [functions.import-external-listings]
 verify_jwt = false
+
+[functions.scheduled-import]
+verify_jwt = false
