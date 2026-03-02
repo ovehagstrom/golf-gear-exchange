@@ -20,3 +20,6 @@ verify_jwt = false
 
 [functions.submit-external-listing]
 verify_jwt = false
+
+[functions.import-external-listings]
+verify_jwt = false

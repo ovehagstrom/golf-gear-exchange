@@ -181,6 +181,60 @@ export type Database = {
           },
         ]
       }
+      external_listings: {
+        Row: {
+          category: string | null
+          city: string | null
+          created_at: string
+          description: string | null
+          id: string
+          image_urls: string[] | null
+          is_active: boolean
+          price: number | null
+          published_at: string | null
+          source: string
+          source_id: string
+          source_url: string
+          specs_json: Json | null
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          category?: string | null
+          city?: string | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          image_urls?: string[] | null
+          is_active?: boolean
+          price?: number | null
+          published_at?: string | null
+          source?: string
+          source_id: string
+          source_url: string
+          specs_json?: Json | null
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          category?: string | null
+          city?: string | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          image_urls?: string[] | null
+          is_active?: boolean
+          price?: number | null
+          published_at?: string | null
+          source?: string
+          source_id?: string
+          source_url?: string
+          specs_json?: Json | null
+          title?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       external_sellers: {
         Row: {
           city: string
