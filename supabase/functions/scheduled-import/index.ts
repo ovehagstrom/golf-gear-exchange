@@ -151,7 +151,21 @@ async function fetchBlocket(): Promise<ExternalListingInput[]> {
         const price = ad.price?.amount || undefined
         const location = ad.location || undefined
         const imageUrls = ad.image_urls?.length ? ad.image_urls : (ad.image?.url ? [ad.image.url] : [])
-        const timestamp = ad.timestamp ? new Date(ad.timestamp * 1000).toISOString() : undefined
+        // Blocket timestamp: detect if seconds or milliseconds
+        let timestamp: string | undefined
+        if (ad.timestamp) {
+          const ts = Number(ad.timestamp)
+          // If ts > year 3000 in seconds (32503680000), it's likely milliseconds already
+          const dateMs = ts > 32503680000 ? ts : ts * 1000
+          const d = new Date(dateMs)
+          // Sanity check: must be between 2020 and 2030
+          if (d.getFullYear() >= 2020 && d.getFullYear() <= 2030) {
+            timestamp = d.toISOString()
+          } else {
+            console.warn(`[Blocket] Ad ${i + 1}: invalid timestamp ${ts} → ${d.toISOString()}, skipping date`)
+            timestamp = undefined
+          }
+        }
 
         console.log(`[Blocket] Ad ${i + 1}: "${heading.substring(0, 50)}" — ${price ?? 'no price'} SEK — ${location ?? 'no location'}`)
 
