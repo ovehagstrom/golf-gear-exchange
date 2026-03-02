@@ -149,6 +149,89 @@ Om ett fält inte kan avgöras, utelämna det.`,
 }
 
 // ============================================================
+// Image proxy/cache helpers (avoid browser ORB/CORS blocking)
+// ============================================================
+
+function guessImageExtension(url: string, contentType?: string | null): string {
+  const type = (contentType || '').toLowerCase()
+  if (type.includes('image/jpeg') || type.includes('image/jpg')) return 'jpg'
+  if (type.includes('image/png')) return 'png'
+  if (type.includes('image/webp')) return 'webp'
+  if (type.includes('image/gif')) return 'gif'
+  if (type.includes('image/avif')) return 'avif'
+
+  try {
+    const pathname = new URL(url).pathname
+    const match = pathname.match(/\.([a-zA-Z0-9]+)$/)
+    if (match?.[1]) return match[1].toLowerCase()
+  } catch {
+    // ignore parse failures
+  }
+
+  return 'jpg'
+}
+
+async function cacheExternalImagesToStorage(
+  supabaseAdmin: ReturnType<typeof createClient>,
+  source: string,
+  sourceId: string,
+  imageUrls: string[]
+): Promise<string[]> {
+  if (!imageUrls?.length) return []
+
+  const uploadedUrls: string[] = []
+
+  for (let i = 0; i < Math.min(imageUrls.length, 2); i++) {
+    const imageUrl = imageUrls[i]
+    if (!imageUrl) continue
+
+    try {
+      const response = await fetch(imageUrl, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (compatible; GolfMarket/1.0)',
+          'Accept': 'image/*,*/*;q=0.8',
+          'Referer': 'https://www.tradera.com/',
+        },
+      })
+
+      if (!response.ok) {
+        console.warn(`[image-cache] Failed ${response.status} for ${imageUrl}`)
+        continue
+      }
+
+      const contentType = response.headers.get('content-type') || 'image/jpeg'
+      if (!contentType.toLowerCase().startsWith('image/')) {
+        console.warn(`[image-cache] Non-image response for ${imageUrl}: ${contentType}`)
+        continue
+      }
+
+      const fileExt = guessImageExtension(imageUrl, contentType)
+      const filePath = `external/${source}/${sourceId}-${i + 1}.${fileExt}`
+      const bytes = new Uint8Array(await response.arrayBuffer())
+
+      const { error: uploadError } = await supabaseAdmin.storage
+        .from('listing-images')
+        .upload(filePath, bytes, {
+          contentType,
+          upsert: true,
+        })
+
+      if (uploadError) {
+        console.warn(`[image-cache] Upload failed for ${filePath}: ${uploadError.message}`)
+        continue
+      }
+
+      const { data } = supabaseAdmin.storage.from('listing-images').getPublicUrl(filePath)
+      if (data?.publicUrl) uploadedUrls.push(data.publicUrl)
+    } catch (err) {
+      console.warn('[image-cache] Unexpected error:', err)
+    }
+  }
+
+  return uploadedUrls
+}
+
+// ============================================================
 // Source fetchers
 // ============================================================
 
@@ -332,14 +415,14 @@ async function fetchTradera(): Promise<ExternalListingInput[]> {
 
         const price = item.price || item.buyNowPrice || undefined
         
-        // Tradera uses imageUrlTemplate with {format} placeholder
-        // Use direct img.tradera.net URLs (the _next/image proxy blocks external referrers)
+        // Tradera uses imageUrlTemplate with {format} placeholder.
+        // Valid formats are e.g. large-fit / medium-fit (item-img-* returns 404).
         const imageUrls: string[] = []
         if (item.imageUrlTemplate) {
-          imageUrls.push(item.imageUrlTemplate.replace('{format}', 'item-img-2'))
+          imageUrls.push(item.imageUrlTemplate.replace('{format}', 'large-fit'))
         }
         if (item.imageSecondaryUrlTemplate) {
-          imageUrls.push(item.imageSecondaryUrlTemplate.replace('{format}', 'item-img-2'))
+          imageUrls.push(item.imageSecondaryUrlTemplate.replace('{format}', 'medium-fit'))
         }
         
         const itemUrl = item.itemUrl || `/item/${id}`
@@ -514,6 +597,20 @@ Deno.serve(async (req) => {
         // Layer 3: Extract specs (only for confirmed golf items)
         const specs = await extractSpecs(listing.title, listing.description)
 
+        let finalImageUrls = listing.image_urls || []
+        if (source === 'tradera' && finalImageUrls.length > 0) {
+          const cachedUrls = await cacheExternalImagesToStorage(
+            supabaseAdmin,
+            source,
+            listing.source_id,
+            finalImageUrls
+          )
+
+          if (cachedUrls.length > 0) {
+            finalImageUrls = cachedUrls
+          }
+        }
+
         const { error } = await supabaseAdmin
           .from('external_listings')
           .upsert({
@@ -523,7 +620,7 @@ Deno.serve(async (req) => {
             price: listing.price || null,
             city: listing.city || null,
             source_url: listing.source_url,
-            image_urls: listing.image_urls || [],
+            image_urls: finalImageUrls,
             description: listing.description || null,
             published_at: listing.published_at || null,
             category: 'Drivers',
