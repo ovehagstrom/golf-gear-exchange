@@ -12,6 +12,8 @@ interface ImportLog {
   source: string;
   imported_count: number;
   skipped_duplicates_count: number;
+  skipped_non_golf_count: number;
+  skipped_keyword_filtered_count: number;
   executed_at: string;
   status: string;
   error_message: string | null;
@@ -217,10 +219,16 @@ export function ExternalListingsImport() {
                       )}
                     </div>
                   </div>
-                  <div className="text-right text-xs text-muted-foreground">
-                    <span className="text-foreground font-medium">{log.imported_count}</span> importerade
+                  <div className="text-right text-xs text-muted-foreground space-y-0.5">
+                    <div><span className="text-foreground font-medium">{log.imported_count}</span> importerade</div>
+                    {log.skipped_keyword_filtered_count > 0 && (
+                      <div><span>{log.skipped_keyword_filtered_count}</span> nyckelordsfiltrerade</div>
+                    )}
+                    {log.skipped_non_golf_count > 0 && (
+                      <div><span>{log.skipped_non_golf_count}</span> AI-avvisade</div>
+                    )}
                     {log.skipped_duplicates_count > 0 && (
-                      <>, <span>{log.skipped_duplicates_count}</span> hoppade</>
+                      <div><span>{log.skipped_duplicates_count}</span> hoppade</div>
                     )}
                   </div>
                 </div>

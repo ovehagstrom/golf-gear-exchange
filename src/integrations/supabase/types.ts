@@ -188,6 +188,8 @@ export type Database = {
           id: string
           imported_count: number
           skipped_duplicates_count: number
+          skipped_keyword_filtered_count: number
+          skipped_non_golf_count: number
           source: string
           status: string
         }
@@ -197,6 +199,8 @@ export type Database = {
           id?: string
           imported_count?: number
           skipped_duplicates_count?: number
+          skipped_keyword_filtered_count?: number
+          skipped_non_golf_count?: number
           source: string
           status?: string
         }
@@ -206,6 +210,8 @@ export type Database = {
           id?: string
           imported_count?: number
           skipped_duplicates_count?: number
+          skipped_keyword_filtered_count?: number
+          skipped_non_golf_count?: number
           source?: string
           status?: string
         }
