@@ -23,14 +23,148 @@ interface ExternalListingInput {
   category?: string
 }
 
+// ---- Helpers ----
+
+/** Simple XML tag content extractor (no dependency needed) */
+function getTagContent(xml: string, tag: string): string | null {
+  const regex = new RegExp(`<${tag}[^>]*><!\\[CDATA\\[([\\s\\S]*?)\\]\\]></${tag}>|<${tag}[^>]*>([\\s\\S]*?)</${tag}>`)
+  const match = xml.match(regex)
+  if (!match) return null
+  return (match[1] ?? match[2] ?? '').trim()
+}
+
+/** Extract all occurrences of a tag */
+function getAllTagContents(xml: string, tag: string): string[] {
+  const regex = new RegExp(`<${tag}[^>]*><!\\[CDATA\\[([\\s\\S]*?)\\]\\]></${tag}>|<${tag}[^>]*>([\\s\\S]*?)</${tag}>`, 'g')
+  const results: string[] = []
+  let m: RegExpExecArray | null
+  while ((m = regex.exec(xml)) !== null) {
+    results.push((m[1] ?? m[2] ?? '').trim())
+  }
+  return results
+}
+
+/** Try to extract a price (integer SEK) from a string */
+function extractPrice(text: string): number | undefined {
+  // Match patterns like "1 500 kr", "1500kr", "1500 SEK", standalone numbers
+  const m = text.match(/([\d\s]+)\s*(?:kr|sek|:-)/i)
+  if (m) {
+    const num = parseInt(m[1].replace(/\s/g, ''), 10)
+    if (!isNaN(num) && num > 0 && num < 10_000_000) return num
+  }
+  return undefined
+}
+
+/** Generate a stable ID from a URL string */
+function hashSourceId(url: string): string {
+  let hash = 0
+  for (let i = 0; i < url.length; i++) {
+    const chr = url.charCodeAt(i)
+    hash = ((hash << 5) - hash) + chr
+    hash |= 0
+  }
+  return `blocket-${Math.abs(hash).toString(36)}`
+}
+
+/** Extract first image URL from HTML content or enclosure/media tags */
+function extractFirstImage(itemXml: string): string[] {
+  // Check for enclosure with image type
+  const encMatch = itemXml.match(/<enclosure[^>]+url=["']([^"']+)["'][^>]*type=["']image/i)
+  if (encMatch) return [encMatch[1]]
+  // Check for media:content or media:thumbnail
+  const mediaMatch = itemXml.match(/<media:(?:content|thumbnail)[^>]+url=["']([^"']+)["']/i)
+  if (mediaMatch) return [mediaMatch[1]]
+  // Check for <img> in description/content
+  const imgMatch = itemXml.match(/<img[^>]+src=["']([^"']+)["']/i)
+  if (imgMatch) return [imgMatch[1]]
+  return []
+}
+
 /**
- * Placeholder: Blocket fetcher
- * Replace this with actual scraping/API logic when ready.
- * For now returns empty array — no mock data in production.
+ * Blocket RSS fetcher
+ * Fetches golf equipment listings via Blocket's RSS feed.
  */
 async function fetchBlocket(): Promise<ExternalListingInput[]> {
-  console.log('[Blocket] Fetcher not yet implemented — skipping')
-  return []
+  const RSS_URL = 'https://www.blocket.se/rss/sport_fritid_hobby?q=golf'
+  const TIMEOUT_MS = 15_000
+  const results: ExternalListingInput[] = []
+
+  console.log('[Blocket] Fetching RSS from', RSS_URL)
+
+  let xml: string
+  try {
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), TIMEOUT_MS)
+
+    const response = await fetch(RSS_URL, {
+      signal: controller.signal,
+      headers: { 'User-Agent': 'GolfMarket-Aggregator/1.0' },
+    })
+    clearTimeout(timer)
+
+    if (!response.ok) {
+      console.error(`[Blocket] RSS returned HTTP ${response.status}`)
+      return []
+    }
+
+    xml = await response.text()
+    console.log(`[Blocket] Received ${xml.length} bytes of XML`)
+  } catch (err) {
+    if (err instanceof DOMException && err.name === 'AbortError') {
+      console.error(`[Blocket] Request timed out after ${TIMEOUT_MS}ms`)
+    } else {
+      console.error('[Blocket] Fetch error:', err)
+    }
+    return []
+  }
+
+  // Split into <item> blocks
+  const itemBlocks = xml.split(/<item[\s>]/).slice(1) // skip content before first <item>
+
+  console.log(`[Blocket] Found ${itemBlocks.length} items in feed`)
+
+  for (const block of itemBlocks) {
+    try {
+      const title = getTagContent(block, 'title')
+      const link = getTagContent(block, 'link')
+      const description = getTagContent(block, 'description')
+      const pubDate = getTagContent(block, 'pubDate')
+
+      if (!title || !link) continue
+
+      // Extract source_id from URL (Blocket URLs typically contain a numeric ID)
+      const idMatch = link.match(/(\d{8,})/)
+      const sourceId = idMatch ? idMatch[1] : hashSourceId(link)
+
+      // Try to extract price from title or description
+      const price = extractPrice(title) ?? (description ? extractPrice(description) : undefined)
+
+      // Try to extract location from title pattern "... - Stad" or from category/geo tags
+      const locationMatch = block.match(/<blocket:location[^>]*>([^<]+)/i)
+        ?? block.match(/<geo:(?:name|locality)[^>]*>([^<]+)/i)
+      const city = locationMatch ? locationMatch[1].trim() : undefined
+
+      const imageUrls = extractFirstImage(block)
+
+      results.push({
+        source: 'blocket',
+        source_id: sourceId,
+        title,
+        price,
+        city,
+        source_url: link,
+        image_urls: imageUrls,
+        description: description ?? undefined,
+        published_at: pubDate ? new Date(pubDate).toISOString() : undefined,
+        category: 'golf',
+      })
+    } catch (itemErr) {
+      console.warn('[Blocket] Skipping malformed item:', itemErr)
+    }
+  }
+
+  console.log(`[Blocket] Parsed ${results.length} valid listings`)
+  return results
 }
 
 /**
