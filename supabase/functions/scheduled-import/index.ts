@@ -318,15 +318,31 @@ async function fetchTradera(): Promise<ExternalListingInput[]> {
     // Also check if data itself is an array
     const itemList = Array.isArray(data) ? data : items
 
+    // Log first item structure for debugging
+    if (itemList.length > 0) {
+      console.log(`[Tradera] First item keys: ${Object.keys(itemList[0]).join(', ')}`)
+      console.log(`[Tradera] First item preview: ${JSON.stringify(itemList[0]).substring(0, 600)}`)
+    }
+
     for (const item of itemList) {
       try {
-        const id = item.id?.toString() || item.itemId?.toString()
+        const id = item.itemId?.toString() || item.id?.toString()
         const title = item.shortDescription || item.title || item.heading
         if (!id || !title) continue
 
-        const price = item.currentBid || item.buyNowPrice || item.price || item.nextBid || undefined
-        const imageUrl = item.imageUrl || item.thumbnailUrl || item.mainImageUrl
-        const itemUrl = item.itemUrl || item.url || `/item/${id}`
+        const price = item.price || item.buyNowPrice || undefined
+        
+        // Tradera uses imageUrlTemplate with {format} placeholder
+        // Replace with a reasonable size format
+        const imageUrls: string[] = []
+        if (item.imageUrlTemplate) {
+          imageUrls.push(item.imageUrlTemplate.replace('{format}', '800'))
+        }
+        if (item.imageSecondaryUrlTemplate) {
+          imageUrls.push(item.imageSecondaryUrlTemplate.replace('{format}', '800'))
+        }
+        
+        const itemUrl = item.itemUrl || `/item/${id}`
 
         results.push({
           source: 'tradera',
@@ -335,7 +351,7 @@ async function fetchTradera(): Promise<ExternalListingInput[]> {
           price: price ? Math.round(Number(price)) : undefined,
           city: undefined,
           source_url: itemUrl.startsWith('http') ? itemUrl : `https://www.tradera.com${itemUrl}`,
-          image_urls: imageUrl ? [imageUrl] : [],
+          image_urls: imageUrls,
           description: item.description || undefined,
           published_at: item.startDate || item.created || undefined,
           category: 'Drivers',
