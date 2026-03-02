@@ -181,6 +181,36 @@ export type Database = {
           },
         ]
       }
+      external_import_logs: {
+        Row: {
+          error_message: string | null
+          executed_at: string
+          id: string
+          imported_count: number
+          skipped_duplicates_count: number
+          source: string
+          status: string
+        }
+        Insert: {
+          error_message?: string | null
+          executed_at?: string
+          id?: string
+          imported_count?: number
+          skipped_duplicates_count?: number
+          source: string
+          status?: string
+        }
+        Update: {
+          error_message?: string | null
+          executed_at?: string
+          id?: string
+          imported_count?: number
+          skipped_duplicates_count?: number
+          source?: string
+          status?: string
+        }
+        Relationships: []
+      }
       external_listings: {
         Row: {
           category: string | null
