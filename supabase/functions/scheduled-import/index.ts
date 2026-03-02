@@ -109,18 +109,54 @@ Deno.serve(async (req) => {
     return new Response(null, { headers: corsHeaders })
   }
 
-  // Security: only allow calls with service role or with the correct Authorization header
-  // from pg_cron (which sends the anon key). We verify by checking a shared secret
-  // or simply trust the internal network. For extra safety we check Authorization.
+  // Security: allow cron (anon key), service role, or authenticated admin
   const authHeader = req.headers.get('Authorization')
-  const anonKey = Deno.env.get('SUPABASE_ANON_KEY')
-  
-  if (!authHeader || !authHeader.includes(anonKey || '___never_match___')) {
-    // Also allow service role
-    const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
-    if (!authHeader || !authHeader.includes(serviceKey || '___never_match___')) {
+  const anonKey = Deno.env.get('SUPABASE_ANON_KEY') || ''
+  const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || ''
+
+  const isCronOrService = authHeader && (
+    authHeader.includes(anonKey) || authHeader.includes(serviceKey)
+  )
+
+  if (!isCronOrService) {
+    // Check if it's an authenticated admin
+    if (!authHeader) {
       return new Response(JSON.stringify({ error: 'Unauthorized' }), {
         status: 401,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }
+
+    const supabaseUser = createClient(
+      Deno.env.get('SUPABASE_URL')!,
+      Deno.env.get('SUPABASE_ANON_KEY')!,
+      { global: { headers: { Authorization: authHeader } } }
+    )
+
+    const token = authHeader.replace('Bearer ', '')
+    const { data: claimsData, error: claimsError } = await supabaseUser.auth.getClaims(token)
+    if (claimsError || !claimsData?.claims) {
+      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+        status: 401,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }
+
+    const userId = claimsData.claims.sub
+    const adminCheck = createClient(
+      Deno.env.get('SUPABASE_URL')!,
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+    )
+    const { data: roleData } = await adminCheck
+      .from('user_roles')
+      .select('role')
+      .eq('user_id', userId)
+      .eq('role', 'admin')
+      .single()
+
+    if (!roleData) {
+      return new Response(JSON.stringify({ error: 'Admin access required' }), {
+        status: 403,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       })
     }
