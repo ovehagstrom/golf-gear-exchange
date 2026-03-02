@@ -15,6 +15,7 @@ import { getStatusInfo } from '@/lib/transactionStatus';
 import { ProductionChecklist } from '@/components/admin/ProductionChecklist';
 import { ReportsModeration } from '@/components/admin/ReportsModeration';
 import { ExternalSellerListings } from '@/components/admin/ExternalSellerListings';
+import { ExternalListingsImport } from '@/components/admin/ExternalListingsImport';
 import { PublicProfile } from '@/lib/types';
 import { 
   Loader2, 
@@ -23,6 +24,7 @@ import {
   DollarSign, 
   Settings,
   RefreshCw,
+  Database,
   CheckCircle,
   XCircle,
   Webhook,
@@ -275,6 +277,10 @@ export default function Admin() {
               <UserPlus className="h-4 w-4" />
               Externa säljare
             </TabsTrigger>
+            <TabsTrigger value="aggregator" className="flex items-center gap-2">
+              <Database className="h-4 w-4" />
+              Aggregator
+            </TabsTrigger>
             <TabsTrigger value="disputes" className="flex items-center gap-2">
               <AlertTriangle className="h-4 w-4" />
               Tvister ({disputes.length})
@@ -303,6 +309,10 @@ export default function Admin() {
 
           <TabsContent value="external">
             <ExternalSellerListings />
+          </TabsContent>
+
+          <TabsContent value="aggregator">
+            <ExternalListingsImport />
           </TabsContent>
 
           <TabsContent value="disputes" className="space-y-4">
