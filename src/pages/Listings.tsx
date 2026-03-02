@@ -95,16 +95,13 @@ export default function Listings() {
     }
 
     // Fetch external listings
-    if (sourceFilter === 'all' || (sourceFilter !== 'golfmarket')) {
+    if (sourceFilter === 'all' || sourceFilter !== 'golfmarket') {
       const fetchExternal = async () => {
         let query = supabase
           .from('external_listings')
           .select('*')
           .eq('is_active', true);
 
-        if (sourceFilter !== 'all' && sourceFilter !== 'golfmarket') {
-          query = query.eq('source', sourceFilter);
-        }
         if (filters.category) query = query.eq('category', filters.category);
         if (filters.city) query = query.ilike('city', `%${filters.city}%`);
         if (filters.minPrice > 0) query = query.gte('price', filters.minPrice);
@@ -213,9 +210,6 @@ export default function Listings() {
                 <SelectContent>
                   <SelectItem value="all">Alla källor</SelectItem>
                   <SelectItem value="golfmarket">GolfMarket</SelectItem>
-                  <SelectItem value="blocket">Blocket</SelectItem>
-                  <SelectItem value="tradera">Tradera</SelectItem>
-                  <SelectItem value="facebook">Facebook</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -235,7 +229,6 @@ export default function Listings() {
                     <TabsList className="h-8">
                       <TabsTrigger value="all" className="text-xs px-2 h-7">Alla</TabsTrigger>
                       <TabsTrigger value="golfmarket" className="text-xs px-2 h-7">GolfMarket</TabsTrigger>
-                      <TabsTrigger value="blocket" className="text-xs px-2 h-7">Blocket</TabsTrigger>
                     </TabsList>
                   </Tabs>
                 </div>

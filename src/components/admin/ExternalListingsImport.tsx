@@ -5,7 +5,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
-import { Upload, Loader2, Database, Clock, CheckCircle, XCircle, Play } from 'lucide-react';
+import { Upload, Loader2, Database, Clock, CheckCircle, XCircle, Play, Trash2 } from 'lucide-react';
 
 interface ImportLog {
   id: string;
@@ -27,10 +27,13 @@ export function ExternalListingsImport() {
   const [triggeringCron, setTriggeringCron] = useState(false);
   const [stats, setStats] = useState<{ total: number; active: number } | null>(null);
   const [logs, setLogs] = useState<ImportLog[]>([]);
+  const [extListings, setExtListings] = useState<{ id: string; title: string; source: string; price: number | null; created_at: string; is_active: boolean }[]>([]);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   useEffect(() => {
     fetchStats();
     fetchLogs();
+    fetchExtListings();
   }, []);
 
   const fetchStats = async () => {
@@ -48,6 +51,31 @@ export function ExternalListingsImport() {
       .order('executed_at', { ascending: false })
       .limit(20);
     setLogs((data as ImportLog[]) || []);
+  };
+
+  const fetchExtListings = async () => {
+    const { data } = await supabase
+      .from('external_listings')
+      .select('id, title, source, price, created_at, is_active')
+      .order('created_at', { ascending: false })
+      .limit(100);
+    setExtListings(data || []);
+  };
+
+  const handleDelete = async (id: string) => {
+    setDeletingId(id);
+    const { error } = await supabase
+      .from('external_listings')
+      .delete()
+      .eq('id', id);
+    if (error) {
+      toast({ variant: 'destructive', title: 'Kunde inte ta bort', description: error.message });
+    } else {
+      toast({ title: 'Annons borttagen' });
+      setExtListings(prev => prev.filter(l => l.id !== id));
+      fetchStats();
+    }
+    setDeletingId(null);
   };
 
   const handleImport = async () => {
@@ -280,6 +308,52 @@ export function ExternalListingsImport() {
               </>
             )}
           </Button>
+        </CardContent>
+      </Card>
+      {/* External listings management */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Database className="h-5 w-5" />
+            Externa annonser ({extListings.length})
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {extListings.length === 0 ? (
+            <p className="text-sm text-muted-foreground text-center py-6">Inga externa annonser</p>
+          ) : (
+            <div className="space-y-2 max-h-[400px] overflow-y-auto">
+              {extListings.map(listing => (
+                <div key={listing.id} className="flex items-center justify-between p-3 border rounded-lg text-sm gap-2">
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium truncate">{listing.title}</p>
+                    <div className="flex items-center gap-2 mt-0.5">
+                      <Badge variant="outline" className="text-xs">{listing.source}</Badge>
+                      {listing.price && (
+                        <span className="text-xs text-muted-foreground">{listing.price} kr</span>
+                      )}
+                      {!listing.is_active && (
+                        <Badge variant="secondary" className="text-xs">Inaktiv</Badge>
+                      )}
+                    </div>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="flex-shrink-0 text-destructive hover:text-destructive hover:bg-destructive/10"
+                    onClick={() => handleDelete(listing.id)}
+                    disabled={deletingId === listing.id}
+                  >
+                    {deletingId === listing.id ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Trash2 className="h-4 w-4" />
+                    )}
+                  </Button>
+                </div>
+              ))}
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>

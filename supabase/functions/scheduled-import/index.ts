@@ -251,12 +251,115 @@ async function fetchBlocket(): Promise<ExternalListingInput[]> {
 }
 
 async function fetchTradera(): Promise<ExternalListingInput[]> {
-  console.log('[Tradera] Fetcher not yet implemented — skipping')
-  return []
+  const TIMEOUT_MS = 15_000
+  const results: ExternalListingInput[] = []
+
+  const url = 'https://www.tradera.com/search?q=golf+driver&categoryId=302037&sortBy=AddedOn'
+  console.log(`[Tradera] Fetching from: ${url}`)
+
+  try {
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), TIMEOUT_MS)
+
+    const response = await fetch(url, {
+      signal: controller.signal,
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml',
+      },
+    })
+    clearTimeout(timer)
+
+    console.log(`[Tradera] HTTP ${response.status}`)
+
+    if (!response.ok) {
+      const body = await response.text().catch(() => '')
+      console.error(`[Tradera] Error ${response.status}: ${body.substring(0, 300)}`)
+      return []
+    }
+
+    const html = await response.text()
+
+    // Try to extract JSON data from Next.js __NEXT_DATA__ or inline scripts
+    const nextDataMatch = html.match(/<script id="__NEXT_DATA__"[^>]*>([\s\S]*?)<\/script>/)
+    if (nextDataMatch) {
+      try {
+        const nextData = JSON.parse(nextDataMatch[1])
+        const items = nextData?.props?.pageProps?.searchResult?.items ||
+                      nextData?.props?.pageProps?.items || []
+        console.log(`[Tradera] Found ${items.length} items via __NEXT_DATA__`)
+
+        for (const item of items) {
+          const id = item.id?.toString() || item.itemId?.toString()
+          const title = item.shortDescription || item.title || item.heading
+          if (!id || !title) continue
+
+          const price = item.currentBid || item.buyNowPrice || item.price || undefined
+          const imageUrl = item.imageUrl || item.thumbnailUrl
+          const itemUrl = item.itemUrl || `/item/${id}`
+
+          results.push({
+            source: 'tradera',
+            source_id: id,
+            title,
+            price: price ? Math.round(Number(price)) : undefined,
+            city: undefined,
+            source_url: itemUrl.startsWith('http') ? itemUrl : `https://www.tradera.com${itemUrl}`,
+            image_urls: imageUrl ? [imageUrl] : [],
+            description: item.description || undefined,
+            published_at: item.startDate || item.created || undefined,
+            category: 'Drivers',
+          })
+        }
+      } catch (parseErr) {
+        console.warn('[Tradera] Failed to parse __NEXT_DATA__:', parseErr)
+      }
+    }
+
+    // Fallback: try to extract from structured data or og tags
+    if (results.length === 0) {
+      const jsonLdMatches = html.matchAll(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/g)
+      for (const m of jsonLdMatches) {
+        try {
+          const ld = JSON.parse(m[1])
+          if (ld['@type'] === 'ItemList' && ld.itemListElement) {
+            for (const elem of ld.itemListElement) {
+              const item = elem.item || elem
+              if (!item.name || !item.url) continue
+              const idMatch = item.url.match(/\/(\d+)/)
+              results.push({
+                source: 'tradera',
+                source_id: idMatch ? idMatch[1] : item.url,
+                title: item.name,
+                price: item.offers?.price ? Math.round(Number(item.offers.price)) : undefined,
+                city: undefined,
+                source_url: item.url.startsWith('http') ? item.url : `https://www.tradera.com${item.url}`,
+                image_urls: item.image ? [item.image] : [],
+                description: item.description || undefined,
+                category: 'Drivers',
+              })
+            }
+          }
+        } catch { /* skip invalid json-ld */ }
+      }
+    }
+
+    console.log(`[Tradera] Extracted ${results.length} ads`)
+  } catch (err) {
+    if (err instanceof DOMException && err.name === 'AbortError') {
+      console.error(`[Tradera] Request timed out after ${TIMEOUT_MS}ms`)
+    } else {
+      console.error('[Tradera] Fetch error:', err)
+    }
+  }
+
+  return results
 }
 
 async function fetchFacebook(): Promise<ExternalListingInput[]> {
-  console.log('[Facebook] Fetcher not yet implemented — skipping')
+  // Facebook Marketplace has no public API and blocks scraping.
+  // This fetcher is a placeholder for when we integrate a proxy/data provider.
+  console.log('[Facebook] No public API available — skipping (requires data provider integration)')
   return []
 }
 
