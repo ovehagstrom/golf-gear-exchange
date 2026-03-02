@@ -27,6 +27,7 @@ interface ImportStats {
   skipped_duplicates: number
   skipped_keyword_filtered: number
   skipped_non_golf: number
+  skipped_non_driver: number
   error?: string
 }
 
@@ -35,11 +36,16 @@ interface ImportStats {
 // ============================================================
 
 const EXCLUDED_KEYWORDS = [
-  'volkswagen', 'vw', 'bil', '1.6 tdi', 'tsi', 'gti', 'r-line', 'variant',
+  'volkswagen', 'vw', 'golf 1.', 'tdi', 'tsi', 'gti', 'bil',
   'hyundai', 'toyota', 'volvo xc', 'bmw', 'audi', 'mercedes', 'skoda',
   'opel', 'ford focus', 'kia', 'mazda', 'nissan', 'peugeot', 'renault',
   'lägenhet', 'bostad', 'hyra', 'tjänst', 'jobb', 'arbete',
 ]
+
+// Require "driver" in the title (temporary: only importing drivers)
+function isDriverListing(title: string): boolean {
+  return title.toLowerCase().includes('driver')
+}
 
 function isKeywordFiltered(title: string, description?: string): boolean {
   const text = `${title} ${description ?? ''}`.toLowerCase()
@@ -152,10 +158,10 @@ async function fetchBlocket(): Promise<ExternalListingInput[]> {
   const results: ExternalListingInput[] = []
 
   const params = new URLSearchParams({
-    q: 'golf',
+    q: 'driver golf',
     lim: '40',
     sort: 'PUBLISHED_DESC',
-    category: '0.86', // Fritid, Hobby & Underhållning
+    category: '0.86', // Sport & Fritid → Golf
   })
 
   const url = `${API_URL}?${params.toString()}`
@@ -226,7 +232,7 @@ async function fetchBlocket(): Promise<ExternalListingInput[]> {
           image_urls: imageUrls,
           description: undefined,
           published_at: timestamp,
-          category: 'golf',
+          category: 'Drivers',
         })
       } catch (itemErr) {
         console.warn(`[Blocket] Ad ${i + 1} parse error:`, itemErr)
@@ -344,6 +350,7 @@ Deno.serve(async (req) => {
       skipped_duplicates: 0,
       skipped_keyword_filtered: 0,
       skipped_non_golf: 0,
+      skipped_non_driver: 0,
     }
 
     try {
@@ -361,6 +368,13 @@ Deno.serve(async (req) => {
         if (isKeywordFiltered(listing.title, listing.description)) {
           console.log(`[${source}] ✗ Keyword filtered: "${listing.title.substring(0, 50)}"`)
           stats.skipped_keyword_filtered++
+          continue
+        }
+
+        // Layer 1b: Must contain "driver" (temporary restriction)
+        if (!isDriverListing(listing.title)) {
+          console.log(`[${source}] ✗ Not a driver listing: "${listing.title.substring(0, 50)}"`)
+          stats.skipped_non_driver++
           continue
         }
 
@@ -387,7 +401,7 @@ Deno.serve(async (req) => {
             image_urls: listing.image_urls || [],
             description: listing.description || null,
             published_at: listing.published_at || null,
-            category: listing.category || null,
+            category: 'Drivers',
             specs_json: specs,
             is_active: true,
           }, {
@@ -415,12 +429,13 @@ Deno.serve(async (req) => {
       skipped_duplicates_count: stats.skipped_duplicates,
       skipped_keyword_filtered_count: stats.skipped_keyword_filtered,
       skipped_non_golf_count: stats.skipped_non_golf,
+      skipped_non_driver_count: stats.skipped_non_driver,
       status: stats.error ? 'error' : 'success',
       error_message: stats.error || null,
     })
 
     results[source] = stats
-    console.log(`[${source}] Done: ${stats.imported} imported, ${stats.skipped_keyword_filtered} keyword-filtered, ${stats.skipped_non_golf} AI-rejected, ${stats.skipped_duplicates} skipped/errors`)
+    console.log(`[${source}] Done: ${stats.imported} imported, ${stats.skipped_keyword_filtered} keyword-filtered, ${stats.skipped_non_driver} non-driver, ${stats.skipped_non_golf} AI-rejected, ${stats.skipped_duplicates} skipped/errors`)
   }
 
   return new Response(JSON.stringify({ success: true, results }), {

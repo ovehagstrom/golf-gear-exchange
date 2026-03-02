@@ -189,6 +189,7 @@ export type Database = {
           imported_count: number
           skipped_duplicates_count: number
           skipped_keyword_filtered_count: number
+          skipped_non_driver_count: number
           skipped_non_golf_count: number
           source: string
           status: string
@@ -200,6 +201,7 @@ export type Database = {
           imported_count?: number
           skipped_duplicates_count?: number
           skipped_keyword_filtered_count?: number
+          skipped_non_driver_count?: number
           skipped_non_golf_count?: number
           source: string
           status?: string
@@ -211,6 +213,7 @@ export type Database = {
           imported_count?: number
           skipped_duplicates_count?: number
           skipped_keyword_filtered_count?: number
+          skipped_non_driver_count?: number
           skipped_non_golf_count?: number
           source?: string
           status?: string
