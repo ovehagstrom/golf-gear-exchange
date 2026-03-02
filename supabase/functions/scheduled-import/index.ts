@@ -81,65 +81,114 @@ function extractFirstImage(itemXml: string): string[] {
 }
 
 /**
- * Blocket RSS fetcher
- * Fetches golf equipment listings via Blocket's RSS feed.
+ * Blocket RSS fetcher — tries multiple known RSS URLs.
+ * DEBUG MODE: date filtering disabled to verify parsing works.
  */
 async function fetchBlocket(): Promise<ExternalListingInput[]> {
-  const RSS_URL = 'https://www.blocket.se/rss/sport_fritid_hobby?q=golf'
+  // Try multiple possible RSS URLs since Blocket changes these periodically
+  const RSS_URLS = [
+    'https://www.blocket.se/rss?q=golf&cg=6060', // sport & fritid category
+    'https://www.blocket.se/rss?q=golfklubbor',
+    'https://www.blocket.se/rss/hela_sverige?q=golf&cg=6060',
+    'https://www.blocket.se/rss/sport_fritid_hobby?q=golf',
+  ]
   const TIMEOUT_MS = 15_000
   const results: ExternalListingInput[] = []
 
-  console.log('[Blocket] Fetching RSS from', RSS_URL)
+  let xml: string | null = null
+  let usedUrl = ''
 
-  let xml: string
-  try {
-    const controller = new AbortController()
-    const timer = setTimeout(() => controller.abort(), TIMEOUT_MS)
+  for (const url of RSS_URLS) {
+    console.log(`[Blocket] Trying RSS URL: ${url}`)
+    try {
+      const controller = new AbortController()
+      const timer = setTimeout(() => controller.abort(), TIMEOUT_MS)
 
-    const response = await fetch(RSS_URL, {
-      signal: controller.signal,
-      headers: { 'User-Agent': 'GolfMarket-Aggregator/1.0' },
-    })
-    clearTimeout(timer)
+      const response = await fetch(url, {
+        signal: controller.signal,
+        headers: { 'User-Agent': 'GolfMarket-Aggregator/1.0' },
+      })
+      clearTimeout(timer)
 
-    if (!response.ok) {
-      console.error(`[Blocket] RSS returned HTTP ${response.status}`)
-      return []
+      console.log(`[Blocket] HTTP ${response.status} from ${url}`)
+      console.log(`[Blocket] Content-Type: ${response.headers.get('content-type')}`)
+
+      if (!response.ok) continue
+
+      const text = await response.text()
+      console.log(`[Blocket] Received ${text.length} bytes`)
+      console.log(`[Blocket] First 500 chars: ${text.substring(0, 500)}`)
+
+      // Verify it looks like RSS/XML
+      if (text.includes('<item') || text.includes('<entry') || text.includes('<rss')) {
+        xml = text
+        usedUrl = url
+        console.log(`[Blocket] ✓ Valid RSS found at ${url}`)
+        break
+      } else {
+        console.warn(`[Blocket] Response from ${url} does not look like RSS, trying next...`)
+      }
+    } catch (err) {
+      if (err instanceof DOMException && err.name === 'AbortError') {
+        console.error(`[Blocket] Timeout after ${TIMEOUT_MS}ms for ${url}`)
+      } else {
+        console.error(`[Blocket] Fetch error for ${url}:`, err)
+      }
     }
+  }
 
-    xml = await response.text()
-    console.log(`[Blocket] Received ${xml.length} bytes of XML`)
-  } catch (err) {
-    if (err instanceof DOMException && err.name === 'AbortError') {
-      console.error(`[Blocket] Request timed out after ${TIMEOUT_MS}ms`)
-    } else {
-      console.error('[Blocket] Fetch error:', err)
-    }
+  if (!xml) {
+    console.error('[Blocket] All RSS URLs failed — no valid feed found')
+    // Return special marker so the caller can log this in external_import_logs
     return []
   }
 
-  // Split into <item> blocks
-  const itemBlocks = xml.split(/<item[\s>]/).slice(1) // skip content before first <item>
+  console.log(`[Blocket] Using feed from: ${usedUrl}`)
+
+  // Split into <item> blocks (also handle <entry> for Atom feeds)
+  let itemBlocks = xml.split(/<item[\s>]/).slice(1)
+  if (itemBlocks.length === 0) {
+    itemBlocks = xml.split(/<entry[\s>]/).slice(1)
+  }
 
   console.log(`[Blocket] Found ${itemBlocks.length} items in feed`)
 
-  for (const block of itemBlocks) {
+  if (itemBlocks.length === 0) {
+    console.warn('[Blocket] Feed parsed successfully but contains 0 items')
+    console.log(`[Blocket] Feed structure preview (tags found): ${
+      [...xml.matchAll(/<(\w+)[\s>]/g)].map(m => m[1]).filter((v, i, a) => a.indexOf(v) === i).join(', ')
+    }`)
+    return []
+  }
+
+  let parsedCount = 0
+  let skippedCount = 0
+
+  for (let i = 0; i < itemBlocks.length; i++) {
+    const block = itemBlocks[i]
     try {
       const title = getTagContent(block, 'title')
       const link = getTagContent(block, 'link')
-      const description = getTagContent(block, 'description')
-      const pubDate = getTagContent(block, 'pubDate')
+      const description = getTagContent(block, 'description') ?? getTagContent(block, 'content')
+      const pubDate = getTagContent(block, 'pubDate') ?? getTagContent(block, 'published') ?? getTagContent(block, 'updated')
 
-      if (!title || !link) continue
+      console.log(`[Blocket] Item ${i + 1}: title="${title?.substring(0, 60)}", link="${link?.substring(0, 80)}", pubDate="${pubDate}"`)
 
-      // Extract source_id from URL (Blocket URLs typically contain a numeric ID)
+      if (!title || !link) {
+        console.warn(`[Blocket] Item ${i + 1} skipped: missing title or link`)
+        skippedCount++
+        continue
+      }
+
+      // DEBUG: date filtering DISABLED — accepting all items
+      // TODO: re-enable after verifying parsing works
+      console.log(`[Blocket] Item ${i + 1}: DATE FILTER DISABLED — including item regardless of date`)
+
       const idMatch = link.match(/(\d{8,})/)
       const sourceId = idMatch ? idMatch[1] : hashSourceId(link)
 
-      // Try to extract price from title or description
       const price = extractPrice(title) ?? (description ? extractPrice(description) : undefined)
 
-      // Try to extract location from title pattern "... - Stad" or from category/geo tags
       const locationMatch = block.match(/<blocket:location[^>]*>([^<]+)/i)
         ?? block.match(/<geo:(?:name|locality)[^>]*>([^<]+)/i)
       const city = locationMatch ? locationMatch[1].trim() : undefined
@@ -158,12 +207,14 @@ async function fetchBlocket(): Promise<ExternalListingInput[]> {
         published_at: pubDate ? new Date(pubDate).toISOString() : undefined,
         category: 'golf',
       })
+      parsedCount++
     } catch (itemErr) {
-      console.warn('[Blocket] Skipping malformed item:', itemErr)
+      console.warn(`[Blocket] Item ${i + 1} error:`, itemErr)
+      skippedCount++
     }
   }
 
-  console.log(`[Blocket] Parsed ${results.length} valid listings`)
+  console.log(`[Blocket] Summary: ${parsedCount} parsed, ${skippedCount} skipped, ${results.length} total results`)
   return results
 }
 
