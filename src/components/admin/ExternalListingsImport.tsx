@@ -14,6 +14,7 @@ interface ImportLog {
   skipped_duplicates_count: number;
   skipped_non_golf_count: number;
   skipped_keyword_filtered_count: number;
+  skipped_non_driver_count: number;
   executed_at: string;
   status: string;
   error_message: string | null;
@@ -223,6 +224,9 @@ export function ExternalListingsImport() {
                     <div><span className="text-foreground font-medium">{log.imported_count}</span> importerade</div>
                     {log.skipped_keyword_filtered_count > 0 && (
                       <div><span>{log.skipped_keyword_filtered_count}</span> nyckelordsfiltrerade</div>
+                    )}
+                    {log.skipped_non_driver_count > 0 && (
+                      <div><span>{log.skipped_non_driver_count}</span> ej driver</div>
                     )}
                     {log.skipped_non_golf_count > 0 && (
                       <div><span>{log.skipped_non_golf_count}</span> AI-avvisade</div>
