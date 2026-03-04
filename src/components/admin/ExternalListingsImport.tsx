@@ -130,10 +130,17 @@ export function ExternalListingsImport() {
 
       toast({
         title: 'Import startad!',
-        description: data.message || 'Importen körs i bakgrunden. Uppdatera sidan om en stund för att se resultat.',
+        description: 'Importen körs i bakgrunden. Resultaten uppdateras automatiskt.',
       });
 
-      // Poll for results after a delay
+      // Poll for results every 15s for up to 5 minutes
+      const pollInterval = setInterval(async () => {
+        await fetchStats();
+        await fetchLogs();
+        await fetchExtListings();
+      }, 15000);
+      setTimeout(() => clearInterval(pollInterval), 5 * 60 * 1000);
+      // Also do an initial check after 10s
       setTimeout(() => {
         fetchStats();
         fetchLogs();
