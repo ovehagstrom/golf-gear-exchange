@@ -117,7 +117,21 @@ export default function Listings() {
         }
 
         const { data } = await query;
-        setExternalListings((data as ExternalListing[]) || []);
+        // Client-side filtering on specs_json fields (brand, flex) since they're JSONB
+        let filtered = (data as ExternalListing[]) || [];
+        if (filters.brand) {
+          const brandLower = filters.brand.toLowerCase();
+          filtered = filtered.filter(l => 
+            l.specs_json?.brand?.toLowerCase().includes(brandLower)
+          );
+        }
+        if (filters.shaftFlex) {
+          const flexLower = filters.shaftFlex.toLowerCase();
+          filtered = filtered.filter(l => 
+            l.specs_json?.flex?.toLowerCase().includes(flexLower)
+          );
+        }
+        setExternalListings(filtered);
       };
       promises.push(fetchExternal());
     } else {
