@@ -170,32 +170,39 @@ export default function Listings() {
     setSearchParams(params);
   };
 
-  // Combine and interleave listings
+  // Combine and interleave listings with source priority
+  const getSourcePriority = (item: CombinedListing): number => {
+    if (item.type === 'internal') return 0; // GolfMarket first
+    if (item.data.source === 'blocket') return 1;
+    return 2; // tradera, facebook, etc.
+  };
+
   const combinedListings: CombinedListing[] = [
     ...internalListings.map(l => ({ type: 'internal' as const, data: l })),
     ...externalListings.map(l => ({ type: 'external' as const, data: l })),
   ];
 
-  // Sort combined by date if needed
-  if (sortBy === 'newest') {
-    combinedListings.sort((a, b) => {
-      const dateA = new Date(a.type === 'internal' ? a.data.created_at! : a.data.created_at).getTime();
-      const dateB = new Date(b.type === 'internal' ? b.data.created_at! : b.data.created_at).getTime();
-      return dateB - dateA;
-    });
-  } else if (sortBy === 'price_asc') {
-    combinedListings.sort((a, b) => {
+  combinedListings.sort((a, b) => {
+    // Primary: source priority
+    const prioDiff = getSourcePriority(a) - getSourcePriority(b);
+    if (prioDiff !== 0) return prioDiff;
+
+    // Secondary: user-selected sort
+    if (sortBy === 'price_asc') {
       const priceA = a.type === 'internal' ? a.data.price : (a.data.price || 0);
       const priceB = b.type === 'internal' ? b.data.price : (b.data.price || 0);
       return priceA - priceB;
-    });
-  } else if (sortBy === 'price_desc') {
-    combinedListings.sort((a, b) => {
+    }
+    if (sortBy === 'price_desc') {
       const priceA = a.type === 'internal' ? a.data.price : (a.data.price || 0);
       const priceB = b.type === 'internal' ? b.data.price : (b.data.price || 0);
       return priceB - priceA;
-    });
-  }
+    }
+    // Default: newest first
+    const dateA = new Date(a.type === 'internal' ? a.data.created_at! : a.data.created_at).getTime();
+    const dateB = new Date(b.type === 'internal' ? b.data.created_at! : b.data.created_at).getTime();
+    return dateB - dateA;
+  });
 
   const totalCount = combinedListings.length;
 
