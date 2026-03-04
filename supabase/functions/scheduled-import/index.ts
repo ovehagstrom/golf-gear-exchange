@@ -238,7 +238,7 @@ async function fetchBlocket(): Promise<ExternalListingInput[]> {
 
   const params = new URLSearchParams({
     q: 'golf klubba',
-    lim: '100',
+    lim: '1000',
     sort: 'PUBLISHED_DESC',
   })
 
