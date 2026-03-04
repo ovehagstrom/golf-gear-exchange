@@ -536,14 +536,26 @@ Deno.serve(async (req) => {
   )
 
   let sourcesToRun = Object.keys(SOURCE_FETCHERS)
+  let maxAgeDays = 1 // default for cron: last 24h
+  let isManual = false
   try {
     const body = await req.json().catch(() => ({}))
     if (body.sources && Array.isArray(body.sources)) {
       sourcesToRun = body.sources.filter((s: string) => s in SOURCE_FETCHERS)
     }
+    if (body.time === 'manual') {
+      isManual = true
+      maxAgeDays = 7 // manual: last 7 days
+    }
+    if (body.maxAgeDays && typeof body.maxAgeDays === 'number') {
+      maxAgeDays = body.maxAgeDays
+    }
   } catch {
     // No body — run all sources
   }
+
+  const cutoffDate = new Date(Date.now() - maxAgeDays * 24 * 60 * 60 * 1000)
+  console.log(`[import] Mode: ${isManual ? 'manual' : 'cron'}, maxAgeDays: ${maxAgeDays}, cutoff: ${cutoffDate.toISOString()}`)
 
   // Run the import in the background so the client doesn't time out
   const importTask = async () => {
@@ -568,6 +580,15 @@ Deno.serve(async (req) => {
           if (!listing.source_id || !listing.title || !listing.source_url) {
             stats.skipped_duplicates++
             continue
+          }
+
+          // Age filter: skip listings older than cutoff
+          if (listing.published_at) {
+            const publishedDate = new Date(listing.published_at)
+            if (publishedDate < cutoffDate) {
+              stats.skipped_duplicates++
+              continue
+            }
           }
 
           // Layer 1: Keyword blocklist (fast, no AI cost)
