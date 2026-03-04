@@ -673,21 +673,33 @@ Deno.serve(async (req) => {
     }
   }
 
-  // Use EdgeRuntime.waitUntil to process in background
-  // @ts-ignore - EdgeRuntime is available in Supabase Edge Functions
-  if (typeof EdgeRuntime !== 'undefined' && EdgeRuntime.waitUntil) {
-    // @ts-ignore
-    EdgeRuntime.waitUntil(importTask())
-  } else {
-    // Fallback: run inline (for older runtime versions)
-    await importTask()
-  }
+  if (isManual) {
+    // Manual: run in background so UI doesn't time out
+    // @ts-ignore - EdgeRuntime is available in Supabase Edge Functions
+    if (typeof EdgeRuntime !== 'undefined' && EdgeRuntime.waitUntil) {
+      // @ts-ignore
+      EdgeRuntime.waitUntil(importTask())
+    } else {
+      await importTask()
+    }
 
-  return new Response(JSON.stringify({ 
-    success: true, 
-    message: 'Import startad i bakgrunden. Kontrollera importhistoriken för resultat.',
-    sources: sourcesToRun,
-  }), {
-    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-  })
+    return new Response(JSON.stringify({ 
+      success: true, 
+      message: 'Import startad i bakgrunden. Kontrollera importhistoriken för resultat.',
+      sources: sourcesToRun,
+    }), {
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    })
+  } else {
+    // Cron/scheduled: run inline so the task completes before the function exits
+    await importTask()
+
+    return new Response(JSON.stringify({ 
+      success: true, 
+      message: 'Schemalagd import klar.',
+      sources: sourcesToRun,
+    }), {
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    })
+  }
 })
