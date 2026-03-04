@@ -545,111 +545,128 @@ Deno.serve(async (req) => {
     // No body — run all sources
   }
 
-  const results: Record<string, ImportStats> = {}
+  // Run the import in the background so the client doesn't time out
+  const importTask = async () => {
+    const results: Record<string, ImportStats> = {}
 
-  for (const source of sourcesToRun) {
-    const fetcher = SOURCE_FETCHERS[source]
-    const stats: ImportStats = {
-      imported: 0,
-      skipped_duplicates: 0,
-      skipped_keyword_filtered: 0,
-      skipped_non_golf: 0,
-      skipped_non_driver: 0,
-    }
+    for (const source of sourcesToRun) {
+      const fetcher = SOURCE_FETCHERS[source]
+      const stats: ImportStats = {
+        imported: 0,
+        skipped_duplicates: 0,
+        skipped_keyword_filtered: 0,
+        skipped_non_golf: 0,
+        skipped_non_driver: 0,
+      }
 
-    try {
-      console.log(`[${source}] Starting fetch...`)
-      const listings = await fetcher()
-      console.log(`[${source}] Fetched ${listings.length} raw listings`)
+      try {
+        console.log(`[${source}] Starting fetch...`)
+        const listings = await fetcher()
+        console.log(`[${source}] Fetched ${listings.length} raw listings`)
 
-      for (const listing of listings) {
-        if (!listing.source_id || !listing.title || !listing.source_url) {
-          stats.skipped_duplicates++
-          continue
-        }
+        for (const listing of listings) {
+          if (!listing.source_id || !listing.title || !listing.source_url) {
+            stats.skipped_duplicates++
+            continue
+          }
 
-        // Layer 1: Keyword blocklist (fast, no AI cost)
-        if (isKeywordFiltered(listing.title, listing.description)) {
-          console.log(`[${source}] ✗ Keyword filtered: "${listing.title.substring(0, 50)}"`)
-          stats.skipped_keyword_filtered++
-          continue
-        }
+          // Layer 1: Keyword blocklist (fast, no AI cost)
+          if (isKeywordFiltered(listing.title, listing.description)) {
+            console.log(`[${source}] ✗ Keyword filtered: "${listing.title.substring(0, 50)}"`)
+            stats.skipped_keyword_filtered++
+            continue
+          }
 
-        // Layer 2: AI golf classification (cheap model, before spec extraction)
-        const isGolf = await isGolfEquipment(listing.title, listing.description)
-        if (!isGolf) {
-          console.log(`[${source}] ✗ AI rejected (not golf): "${listing.title.substring(0, 50)}"`)
-          stats.skipped_non_golf++
-          continue
-        }
+          // Layer 2: AI golf classification (cheap model, before spec extraction)
+          const isGolf = await isGolfEquipment(listing.title, listing.description)
+          if (!isGolf) {
+            console.log(`[${source}] ✗ AI rejected (not golf): "${listing.title.substring(0, 50)}"`)
+            stats.skipped_non_golf++
+            continue
+          }
 
-        // Layer 3: Extract specs (only for confirmed golf items)
-        const specs = await extractSpecs(listing.title, listing.description)
+          // Layer 3: Extract specs (only for confirmed golf items)
+          const specs = await extractSpecs(listing.title, listing.description)
 
-        let finalImageUrls = listing.image_urls || []
-        if (source === 'tradera' && finalImageUrls.length > 0) {
-          const cachedUrls = await cacheExternalImagesToStorage(
-            supabaseAdmin,
-            source,
-            listing.source_id,
-            finalImageUrls
-          )
+          let finalImageUrls = listing.image_urls || []
+          if (source === 'tradera' && finalImageUrls.length > 0) {
+            const cachedUrls = await cacheExternalImagesToStorage(
+              supabaseAdmin,
+              source,
+              listing.source_id,
+              finalImageUrls
+            )
 
-          if (cachedUrls.length > 0) {
-            finalImageUrls = cachedUrls
+            if (cachedUrls.length > 0) {
+              finalImageUrls = cachedUrls
+            }
+          }
+
+          const { error } = await supabaseAdmin
+            .from('external_listings')
+            .upsert({
+              source: listing.source || source,
+              source_id: listing.source_id,
+              title: listing.title,
+              price: listing.price || null,
+              city: listing.city || null,
+              source_url: listing.source_url,
+              image_urls: finalImageUrls,
+              description: listing.description || null,
+              published_at: listing.published_at || null,
+              category: (specs as Record<string, string>).category || listing.category || null,
+              specs_json: specs,
+              is_active: true,
+            }, {
+              onConflict: 'source,source_id',
+              ignoreDuplicates: false,
+            })
+
+          if (error) {
+            console.error(`[${source}] Upsert error:`, error)
+            stats.skipped_duplicates++
+          } else {
+            console.log(`[${source}] ✓ Imported: "${listing.title.substring(0, 50)}"`)
+            stats.imported++
           }
         }
-
-        const { error } = await supabaseAdmin
-          .from('external_listings')
-          .upsert({
-            source: listing.source || source,
-            source_id: listing.source_id,
-            title: listing.title,
-            price: listing.price || null,
-            city: listing.city || null,
-            source_url: listing.source_url,
-            image_urls: finalImageUrls,
-            description: listing.description || null,
-            published_at: listing.published_at || null,
-            category: (specs as Record<string, string>).category || listing.category || null,
-            specs_json: specs,
-            is_active: true,
-          }, {
-            onConflict: 'source,source_id',
-            ignoreDuplicates: false,
-          })
-
-        if (error) {
-          console.error(`[${source}] Upsert error:`, error)
-          stats.skipped_duplicates++
-        } else {
-          console.log(`[${source}] ✓ Imported: "${listing.title.substring(0, 50)}"`)
-          stats.imported++
-        }
+      } catch (err) {
+        console.error(`[${source}] Fatal error:`, err)
+        stats.error = err instanceof Error ? err.message : 'Unknown error'
       }
-    } catch (err) {
-      console.error(`[${source}] Fatal error:`, err)
-      stats.error = err instanceof Error ? err.message : 'Unknown error'
+
+      // Log to external_import_logs
+      await supabaseAdmin.from('external_import_logs').insert({
+        source,
+        imported_count: stats.imported,
+        skipped_duplicates_count: stats.skipped_duplicates,
+        skipped_keyword_filtered_count: stats.skipped_keyword_filtered,
+        skipped_non_golf_count: stats.skipped_non_golf,
+        skipped_non_driver_count: stats.skipped_non_driver,
+        status: stats.error ? 'error' : 'success',
+        error_message: stats.error || null,
+      })
+
+      results[source] = stats
+      console.log(`[${source}] Done: ${stats.imported} imported, ${stats.skipped_keyword_filtered} keyword-filtered, ${stats.skipped_non_driver} non-driver, ${stats.skipped_non_golf} AI-rejected, ${stats.skipped_duplicates} skipped/errors`)
     }
-
-    // Log to external_import_logs with new columns
-    await supabaseAdmin.from('external_import_logs').insert({
-      source,
-      imported_count: stats.imported,
-      skipped_duplicates_count: stats.skipped_duplicates,
-      skipped_keyword_filtered_count: stats.skipped_keyword_filtered,
-      skipped_non_golf_count: stats.skipped_non_golf,
-      skipped_non_driver_count: stats.skipped_non_driver,
-      status: stats.error ? 'error' : 'success',
-      error_message: stats.error || null,
-    })
-
-    results[source] = stats
-    console.log(`[${source}] Done: ${stats.imported} imported, ${stats.skipped_keyword_filtered} keyword-filtered, ${stats.skipped_non_driver} non-driver, ${stats.skipped_non_golf} AI-rejected, ${stats.skipped_duplicates} skipped/errors`)
   }
 
-  return new Response(JSON.stringify({ success: true, results }), {
+  // Use EdgeRuntime.waitUntil to process in background
+  // @ts-ignore - EdgeRuntime is available in Supabase Edge Functions
+  if (typeof EdgeRuntime !== 'undefined' && EdgeRuntime.waitUntil) {
+    // @ts-ignore
+    EdgeRuntime.waitUntil(importTask())
+  } else {
+    // Fallback: run inline (for older runtime versions)
+    await importTask()
+  }
+
+  return new Response(JSON.stringify({ 
+    success: true, 
+    message: 'Import startad i bakgrunden. Kontrollera importhistoriken för resultat.',
+    sources: sourcesToRun,
+  }), {
     headers: { ...corsHeaders, 'Content-Type': 'application/json' },
   })
 })

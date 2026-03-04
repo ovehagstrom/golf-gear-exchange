@@ -129,11 +129,16 @@ export function ExternalListingsImport() {
       if (error) throw error;
 
       toast({
-        title: 'Schemalagd import körd!',
-        description: JSON.stringify(data.results),
+        title: 'Import startad!',
+        description: data.message || 'Importen körs i bakgrunden. Uppdatera sidan om en stund för att se resultat.',
       });
-      fetchStats();
-      fetchLogs();
+
+      // Poll for results after a delay
+      setTimeout(() => {
+        fetchStats();
+        fetchLogs();
+        fetchExtListings();
+      }, 10000);
     } catch (error) {
       toast({
         variant: 'destructive',
