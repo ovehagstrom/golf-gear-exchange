@@ -183,25 +183,24 @@ export default function Listings() {
   ];
 
   combinedListings.sort((a, b) => {
-    // Primary: source priority
-    const prioDiff = getSourcePriority(a) - getSourcePriority(b);
-    if (prioDiff !== 0) return prioDiff;
+    const priceA = a.type === 'internal' ? a.data.price : (a.data.price || 0);
+    const priceB = b.type === 'internal' ? b.data.price : (b.data.price || 0);
 
-    // Secondary: user-selected sort
     if (sortBy === 'price_asc') {
-      const priceA = a.type === 'internal' ? a.data.price : (a.data.price || 0);
-      const priceB = b.type === 'internal' ? b.data.price : (b.data.price || 0);
-      return priceA - priceB;
+      const diff = priceA - priceB;
+      if (diff !== 0) return diff;
+    } else if (sortBy === 'price_desc') {
+      const diff = priceB - priceA;
+      if (diff !== 0) return diff;
+    } else {
+      const dateA = new Date(a.type === 'internal' ? a.data.created_at! : a.data.created_at).getTime();
+      const dateB = new Date(b.type === 'internal' ? b.data.created_at! : b.data.created_at).getTime();
+      const diff = dateB - dateA;
+      if (diff !== 0) return diff;
     }
-    if (sortBy === 'price_desc') {
-      const priceA = a.type === 'internal' ? a.data.price : (a.data.price || 0);
-      const priceB = b.type === 'internal' ? b.data.price : (b.data.price || 0);
-      return priceB - priceA;
-    }
-    // Default: newest first
-    const dateA = new Date(a.type === 'internal' ? a.data.created_at! : a.data.created_at).getTime();
-    const dateB = new Date(b.type === 'internal' ? b.data.created_at! : b.data.created_at).getTime();
-    return dateB - dateA;
+
+    // Tiebreaker: GolfMarket first
+    return getSourcePriority(a) - getSourcePriority(b);
   });
 
   const totalCount = combinedListings.length;
