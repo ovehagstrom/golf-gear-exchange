@@ -40,12 +40,8 @@ const EXCLUDED_KEYWORDS = [
   'hyundai', 'toyota', 'volvo xc', 'bmw', 'audi', 'mercedes', 'skoda',
   'opel', 'ford focus', 'kia', 'mazda', 'nissan', 'peugeot', 'renault',
   'lägenhet', 'bostad', 'hyra', 'tjänst', 'jobb', 'arbete',
+  'disc', 'innova', 'discraft', 'discmania', 'frisbee',
 ]
-
-// Require "driver" in the title (temporary: only importing drivers)
-function isDriverListing(title: string): boolean {
-  return title.toLowerCase().includes('driver')
-}
 
 function isKeywordFiltered(title: string, description?: string): boolean {
   const text = `${title} ${description ?? ''}`.toLowerCase()
@@ -127,7 +123,7 @@ async function extractSpecs(title: string, description?: string): Promise<Record
           {
             role: 'system',
             content: `Du är en expert på golfutrustning. Analysera annonstexten och extrahera följande specs som JSON. Svara BARA med JSON, inget annat.
-Fält: brand, model, loft, shaft_model, flex, hand (höger/vänster)
+Fält: brand, model, loft, shaft_model, flex, hand (höger/vänster), category (driver/fairway_wood/hybrid/driving_iron/iron_set/wedge/putter/shaft/complete_set/bag/accessories/other)
 Om ett fält inte kan avgöras, utelämna det.`,
           },
           { role: 'user', content: text },
@@ -241,7 +237,7 @@ async function fetchBlocket(): Promise<ExternalListingInput[]> {
   const results: ExternalListingInput[] = []
 
   const params = new URLSearchParams({
-    q: 'golf driver',
+    q: 'golf klubba',
     lim: '40',
     sort: 'PUBLISHED_DESC',
   })
@@ -314,7 +310,7 @@ async function fetchBlocket(): Promise<ExternalListingInput[]> {
           image_urls: imageUrls,
           description: undefined,
           published_at: timestamp,
-          category: 'Drivers',
+            category: undefined,
         })
       } catch (itemErr) {
         console.warn(`[Blocket] Ad ${i + 1} parse error:`, itemErr)
@@ -340,7 +336,7 @@ async function fetchTradera(): Promise<ExternalListingInput[]> {
   // Tradera internal POST API (discovered from tradera_api Python package)
   const apiUrl = 'https://www.tradera.com/api/webapi/discover/web/independent-search'
   const params = new URLSearchParams({
-    query: 'golf driver',
+    query: 'golf klubba',
     sortBy: 'AddedOn',
     categoryId: '25', // sport_fritid
     itemStatus: 'unsold',
@@ -437,7 +433,7 @@ async function fetchTradera(): Promise<ExternalListingInput[]> {
           image_urls: imageUrls,
           description: item.description || undefined,
           published_at: item.startDate || item.created || undefined,
-          category: 'Drivers',
+          category: undefined,
         })
       } catch (itemErr) {
         console.warn(`[Tradera] Item parse error:`, itemErr)
@@ -579,13 +575,6 @@ Deno.serve(async (req) => {
           continue
         }
 
-        // Layer 1b: Must contain "driver" (temporary restriction)
-        if (!isDriverListing(listing.title)) {
-          console.log(`[${source}] ✗ Not a driver listing: "${listing.title.substring(0, 50)}"`)
-          stats.skipped_non_driver++
-          continue
-        }
-
         // Layer 2: AI golf classification (cheap model, before spec extraction)
         const isGolf = await isGolfEquipment(listing.title, listing.description)
         if (!isGolf) {
@@ -623,7 +612,7 @@ Deno.serve(async (req) => {
             image_urls: finalImageUrls,
             description: listing.description || null,
             published_at: listing.published_at || null,
-            category: 'Drivers',
+            category: (specs as Record<string, string>).category || listing.category || null,
             specs_json: specs,
             is_active: true,
           }, {

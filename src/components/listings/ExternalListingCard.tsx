@@ -121,9 +121,9 @@ export function ExternalListingCard({ listing }: ExternalListingCardProps) {
                 {specs.loft}°
               </Badge>
             )}
-            {specs.hand && (
+            {specs.hand && specs.hand.toLowerCase() === 'vänster' && (
               <Badge variant="outline" className="text-xs font-normal">
-                {specs.hand === 'vänster' ? '🫲 Vänster' : '🫱 Höger'}
+                🫲 Vänster
               </Badge>
             )}
           </div>
