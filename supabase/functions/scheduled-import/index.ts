@@ -1456,8 +1456,8 @@ Deno.serve(async (req) => {
   const importTask = async () => {
     const results: Record<string, ImportStats> = {}
 
-    // Run all sources IN PARALLEL to avoid timeout
-    const sourcePromises = sourcesToRun.map(async (source) => {
+    // Run sources SEQUENTIALLY to reduce memory usage
+    for (const source of sourcesToRun) {
       const fetcher = SOURCE_FETCHERS[source]
       const stats: ImportStats = {
         imported: 0,
@@ -1491,12 +1491,9 @@ Deno.serve(async (req) => {
             }
           }
 
-          // Skip keyword filter and AI classification for store products 
-          // (they come from golf-specific pages, so they're always golf)
           const isStoreProduct = source === 'stores'
 
           if (!isStoreProduct && isKeywordFiltered(listing.title, listing.description)) {
-            console.log(`[${source}] ✗ Keyword filtered: "${listing.title.substring(0, 50)}"`)
             stats.skipped_keyword_filtered++
             continue
           }
@@ -1504,14 +1501,13 @@ Deno.serve(async (req) => {
           if (!isStoreProduct) {
             const isGolf = await isGolfEquipment(listing.title, listing.description)
             if (!isGolf) {
-              console.log(`[${source}] ✗ AI rejected (not golf): "${listing.title.substring(0, 50)}"`)
               stats.skipped_non_golf++
               continue
             }
           }
 
           const specs = isStoreProduct 
-            ? {} // Store products already have category from AI extraction
+            ? {}
             : await extractSpecs(listing.title, listing.description)
 
           let finalImageUrls = listing.image_urls || []
@@ -1524,7 +1520,6 @@ Deno.serve(async (req) => {
               listing.source_id,
               finalImageUrls
             )
-
             if (cachedUrls.length > 0) {
               finalImageUrls = cachedUrls
             }
@@ -1575,9 +1570,8 @@ Deno.serve(async (req) => {
 
       results[source] = stats
       console.log(`[${source}] Done: imported=${stats.imported}, keyword_filtered=${stats.skipped_keyword_filtered}, ai_rejected=${stats.skipped_non_golf}, skipped=${stats.skipped_duplicates}`)
-    })
+    }
 
-    await Promise.all(sourcePromises)
     return results
   }
 
