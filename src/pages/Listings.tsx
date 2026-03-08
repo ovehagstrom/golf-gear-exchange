@@ -159,19 +159,8 @@ export default function Listings() {
     if (newFilters.search) params.set('search', newFilters.search);
     if (newFilters.minPrice > 0) params.set('minPrice', newFilters.minPrice.toString());
     if (newFilters.maxPrice < 100000) params.set('maxPrice', newFilters.maxPrice.toString());
-    if (sourceFilter !== 'all') params.set('source', sourceFilter);
+    if (newFilters.source) params.set('source', newFilters.source);
     
-    setSearchParams(params);
-  };
-
-  const handleSourceChange = (value: string) => {
-    setSourceFilter(value);
-    const params = new URLSearchParams(searchParams);
-    if (value === 'all') {
-      params.delete('source');
-    } else {
-      params.set('source', value);
-    }
     setSearchParams(params);
   };
 
