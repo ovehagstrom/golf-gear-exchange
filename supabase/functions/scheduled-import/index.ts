@@ -1080,6 +1080,7 @@ Deno.serve(async (req) => {
   let isManual = false
   let forceInline = false
   let maxListingsPerSource = 120
+  let storeSources: string[] = []
 
   try {
     const body = await req.json().catch(() => ({}))
