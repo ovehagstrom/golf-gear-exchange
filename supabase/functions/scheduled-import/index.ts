@@ -796,6 +796,20 @@ function extractImageUrlsFromMarkdown(markdown: string): string[] {
   return Array.from(urls).slice(0, 4)
 }
 
+function isLikelyImageUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url)
+    const pathname = parsed.pathname.toLowerCase()
+    const hostname = parsed.hostname.toLowerCase()
+
+    if (/\.(jpg|jpeg|png|webp|avif|gif|svg)$/.test(pathname)) return true
+    if (hostname.includes('cdn.shopify.com') && pathname.includes('/files/')) return true
+    return false
+  } catch {
+    return false
+  }
+}
+
 async function extractProductsFromMarkdown(
   markdown: string,
   storeName: string,
