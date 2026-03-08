@@ -28,6 +28,7 @@ import Help from "./pages/Help";
 import Safety from "./pages/Safety";
 import FAQ from "./pages/FAQ";
 import SubmitListing from "./pages/SubmitListing";
+import ExternalListingDetail from "./pages/ExternalListingDetail";
 
 const queryClient = new QueryClient();
 
