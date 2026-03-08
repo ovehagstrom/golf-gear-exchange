@@ -940,7 +940,8 @@ Deno.serve(async (req) => {
   const importTask = async () => {
     const results: Record<string, ImportStats> = {}
 
-    for (const source of sourcesToRun) {
+    // Run all sources IN PARALLEL to avoid timeout
+    const sourcePromises = sourcesToRun.map(async (source) => {
       const fetcher = SOURCE_FETCHERS[source]
       const stats: ImportStats = {
         imported: 0,
@@ -970,20 +971,28 @@ Deno.serve(async (req) => {
             }
           }
 
-          if (isKeywordFiltered(listing.title, listing.description)) {
+          // Skip keyword filter and AI classification for store products 
+          // (they come from golf-specific pages, so they're always golf)
+          const isStoreProduct = source === 'stores'
+
+          if (!isStoreProduct && isKeywordFiltered(listing.title, listing.description)) {
             console.log(`[${source}] ✗ Keyword filtered: "${listing.title.substring(0, 50)}"`)
             stats.skipped_keyword_filtered++
             continue
           }
 
-          const isGolf = await isGolfEquipment(listing.title, listing.description)
-          if (!isGolf) {
-            console.log(`[${source}] ✗ AI rejected (not golf): "${listing.title.substring(0, 50)}"`)
-            stats.skipped_non_golf++
-            continue
+          if (!isStoreProduct) {
+            const isGolf = await isGolfEquipment(listing.title, listing.description)
+            if (!isGolf) {
+              console.log(`[${source}] ✗ AI rejected (not golf): "${listing.title.substring(0, 50)}"`)
+              stats.skipped_non_golf++
+              continue
+            }
           }
 
-          const specs = await extractSpecs(listing.title, listing.description)
+          const specs = isStoreProduct 
+            ? {} // Store products already have category from AI extraction
+            : await extractSpecs(listing.title, listing.description)
 
           let finalImageUrls = listing.image_urls || []
           if (source === 'tradera' && finalImageUrls.length > 0) {
@@ -1044,15 +1053,14 @@ Deno.serve(async (req) => {
 
       results[source] = stats
       console.log(`[${source}] Done: imported=${stats.imported}, keyword_filtered=${stats.skipped_keyword_filtered}, ai_rejected=${stats.skipped_non_golf}, skipped=${stats.skipped_duplicates}`)
-    }
+    })
 
+    await Promise.all(sourcePromises)
     return results
   }
 
-  const shouldRunInBackground = !forceInline
-
-  if (shouldRunInBackground) {
-    // Important for scheduled cron: return quickly so pg_net doesn't hit its HTTP timeout.
+  if (isManual) {
+    // Manual: run in background, return immediately
     // @ts-ignore - EdgeRuntime is available in Supabase Edge Functions
     if (typeof EdgeRuntime !== 'undefined' && EdgeRuntime.waitUntil) {
       // @ts-ignore
@@ -1063,15 +1071,14 @@ Deno.serve(async (req) => {
 
     return new Response(JSON.stringify({
       success: true,
-      message: isManual
-        ? 'Import startad i bakgrunden. Kontrollera importhistoriken för resultat.'
-        : 'Schemalagd import startad i bakgrunden.',
+      message: 'Import startad i bakgrunden. Kontrollera importhistoriken för resultat.',
       sources: sourcesToRun,
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     })
   }
 
+  // Scheduled/cron or inline: run synchronously to ensure completion
   const results = await importTask()
   return new Response(JSON.stringify({
     success: true,
