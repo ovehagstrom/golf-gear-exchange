@@ -45,6 +45,7 @@ const App = () => (
             <Route path="/listings" element={<Listings />} />
             <Route path="/listings/new" element={<NewListing />} />
             <Route path="/listings/:id" element={<ListingDetail />} />
+            <Route path="/external/:id" element={<ExternalListingDetail />} />
             <Route path="/messages" element={<Messages />} />
             <Route path="/messages/:id" element={<Conversation />} />
             <Route path="/profile" element={<Profile />} />
