@@ -1227,10 +1227,12 @@ Deno.serve(async (req) => {
             : await extractSpecs(listing.title, listing.description)
 
           let finalImageUrls = listing.image_urls || []
-          if (source === 'tradera' && finalImageUrls.length > 0) {
+          const shouldCacheExternalImages = source === 'tradera' || source === 'stores'
+
+          if (shouldCacheExternalImages && finalImageUrls.length > 0) {
             const cachedUrls = await cacheExternalImagesToStorage(
               supabaseAdmin,
-              source,
+              listing.source || source,
               listing.source_id,
               finalImageUrls
             )
