@@ -989,7 +989,7 @@ function stripFilterNavigation(markdown: string): string {
   // Try to find the start of product listings by looking for common patterns
   const patterns = [
     /\d+-\d+ av \d+ modeller/,       // Golfbidder: "1-30 av 466 modeller"
-    /\d+ resultat\n/,                  // Swegolf: "2 resultat"
+    /\d+ resultat\n/,                  // Generic: "2 resultat"
     /Sorterat efter\n/,                // Golfbidder sort section
     /Visar \d+/,                       // Generic "Visar X produkter"
   ]
@@ -997,10 +997,22 @@ function stripFilterNavigation(markdown: string): string {
   for (const pattern of patterns) {
     const match = markdown.search(pattern)
     if (match > 500) {
-      // Found product section marker, skip everything before it
       const stripped = markdown.substring(match)
-      if (stripped.length > 200) return stripped
+      if (stripped.length > 200) {
+        // For Golfbidder, skip further to the first product image link [![
+        const firstProduct = stripped.search(/\[!\[/)
+        if (firstProduct > 0 && firstProduct < 500) {
+          return stripped.substring(firstProduct)
+        }
+        return stripped
+      }
     }
+  }
+
+  // Fallback: find first product image pattern directly
+  const firstProductImage = markdown.search(/\[!\[.*?\]\(https?:\/\/.*?\/media\/catalog\/product\//)
+  if (firstProductImage > 500) {
+    return markdown.substring(firstProductImage)
   }
 
   return markdown
