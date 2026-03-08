@@ -879,6 +879,7 @@ async function resolveImageFromProductUrl(productUrl: string): Promise<string | 
 async function extractProductsFromMarkdown(
   markdown: string,
   storeName: string,
+  storeSource: string,
   sourceUrl: string,
   fallbackImages: string[]
 ): Promise<ExternalListingInput[]> {
@@ -900,9 +901,11 @@ async function extractProductsFromMarkdown(
           {
             role: 'system',
             content: `Du extraherar golfprodukter från webbsidors innehåll. Svara BARA med en JSON-array med produkter.
-Varje produkt ska ha: title (string), price (number i SEK, utan "kr"), brand (string), category (driver/fairway_wood/hybrid/iron_set/wedge/putter/shaft/complete_set/bag/accessories/other), image_url (string, absolut URL om tillgänglig).
-Inkludera BARA golfklubbor (inte bollar, kläder, skor, bagar, vagnar, tillbehör).
-Om du inte kan hitta några produkter, svara med tom array [].
+Varje produkt ska ha: title (string), price (number i SEK, utan "kr"), brand (string), category (driver/fairway_wood/hybrid/iron_set/wedge/putter/shaft/complete_set/bag/accessories/other), product_url (string, absolut eller relativ URL till PRODUKT), image_url (string, absolut URL om tillgänglig).
+VIKTIGT:
+- Inkludera BARA riktiga produktsidor, inte kategorier, menyer eller filtreringslänkar.
+- Inkludera BARA golfklubbor (inte bollar, kläder, skor, bagar, vagnar, tillbehör).
+- Om du inte kan hitta några produkter, svara med tom array [].
 Max 30 produkter.`,
           },
           {
@@ -928,30 +931,45 @@ Max 30 produkter.`,
     const products = JSON.parse(jsonMatch[0])
     if (!Array.isArray(products)) return []
 
+    const strictSource = STRICT_PRODUCT_URL_SOURCES.has(storeSource)
+    const filteredFallbackImages = fallbackImages.filter(isLikelyImageUrl)
     const result: ExternalListingInput[] = []
 
     for (const [index, p] of products.entries()) {
       if (!p || typeof p !== 'object' || !('title' in p) || typeof p.title !== 'string') continue
 
-      const aiImageRaw = typeof p.image_url === 'string' ? p.image_url : undefined
-      let resolvedImage: string | undefined
+      const title = (p.title as string).trim()
+      if (!title || isCategoryLikeTitle(title)) continue
 
-      if (aiImageRaw && isLikelyImageUrl(aiImageRaw)) {
-        resolvedImage = aiImageRaw
-      } else if (aiImageRaw && aiImageRaw.includes('/products/')) {
-        resolvedImage = await resolveImageFromProductUrl(aiImageRaw)
+      const rawProductUrl = typeof p.product_url === 'string' ? p.product_url : undefined
+      const resolvedProductUrl = rawProductUrl ? toAbsoluteUrl(sourceUrl, rawProductUrl) : null
+
+      if (strictSource && (!resolvedProductUrl || resolvedProductUrl === sourceUrl)) {
+        continue
       }
 
-      const fallbackImage = fallbackImages.find(isLikelyImageUrl) || fallbackImages[index]
+      const aiImageRaw = typeof p.image_url === 'string' ? p.image_url : undefined
+      const aiImageAbsolute = aiImageRaw ? toAbsoluteUrl(sourceUrl, aiImageRaw) : null
+
+      let resolvedImage: string | undefined
+      if (aiImageAbsolute && isLikelyImageUrl(aiImageAbsolute)) {
+        resolvedImage = aiImageAbsolute
+      }
+
+      if (!resolvedImage && resolvedProductUrl) {
+        resolvedImage = await resolveImageFromProductUrl(resolvedProductUrl)
+      }
+
+      const fallbackImage = filteredFallbackImages[index] || filteredFallbackImages[0]
       const chosenImage = resolvedImage || fallbackImage
 
       result.push({
-        source: storeName.toLowerCase().replace(/[^a-z0-9]/g, '_'),
-        source_id: `${storeName.toLowerCase().replace(/[^a-z0-9]/g, '_')}-${(p.title as string).toLowerCase().replace(/[^a-z0-9åäö]/g, '-').substring(0, 60)}`,
-        title: p.title as string,
+        source: storeSource,
+        source_id: `${storeSource}-${title.toLowerCase().replace(/[^a-z0-9åäö]/g, '-').substring(0, 60)}`,
+        title,
         price: typeof p.price === 'number' ? Math.round(p.price) : undefined,
         city: undefined,
-        source_url: sourceUrl,
+        source_url: resolvedProductUrl || sourceUrl,
         image_urls: chosenImage ? [chosenImage] : [],
         description: undefined,
         published_at: new Date().toISOString(),
