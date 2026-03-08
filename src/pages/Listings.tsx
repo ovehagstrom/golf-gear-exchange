@@ -62,7 +62,7 @@ export default function Listings() {
     const promises: Promise<void>[] = [];
 
     // Fetch internal listings
-    if (sourceFilter === 'all' || sourceFilter === 'golfmarket') {
+    if (!filters.source || filters.source === 'golfmarket') {
       const fetchInternal = async () => {
         let query = supabase
           .from('listings')
