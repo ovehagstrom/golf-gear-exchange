@@ -1,0 +1,1 @@
+UPDATE external_listings SET is_active = false WHERE source IN ('golfbidder', 'swegolf') AND is_active = true;
