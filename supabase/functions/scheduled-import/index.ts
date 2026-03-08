@@ -1215,9 +1215,7 @@ Max 30 produkter.`
       })
     }
 
-    const markdownParsed = storeSource === 'golfbidder'
-      ? []
-      : extractProductsFromMarkdownLinks(cleanedMarkdown, storeSource, sourceUrl, filteredFallbackImages)
+    const markdownParsed = extractProductsFromMarkdownLinks(cleanedMarkdown, storeSource, sourceUrl, filteredFallbackImages)
     const mergedByUrl = new Map<string, ExternalListingInput>()
 
     for (const item of [...result, ...markdownParsed]) {
