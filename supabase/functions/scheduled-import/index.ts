@@ -642,7 +642,12 @@ const GOLF_STORES: StoreConfig[] = [
     name: 'Golfbidder',
     source: 'golfbidder',
     urls: [
-      'https://www.golfbidder.se/',
+      'https://www.golfbidder.com/sv/golfklubbor/drivers',
+      'https://www.golfbidder.com/sv/golfklubbor/fairwaywoods',
+      'https://www.golfbidder.com/sv/golfklubbor/hybrider-och-utilityjarn',
+      'https://www.golfbidder.com/sv/golfklubbor/jarnset',
+      'https://www.golfbidder.com/sv/golfklubbor/wedgar',
+      'https://www.golfbidder.com/sv/golfklubbor/putters',
     ],
   },
   {
