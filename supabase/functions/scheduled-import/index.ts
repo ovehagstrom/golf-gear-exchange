@@ -691,7 +691,7 @@ const CATEGORY_ONLY_TITLES = new Set([
   'enstaka järn', 'lösa juniorklubbor', 'juniorklubbpaket', 'skaft', 'helset', 'klubbor', 'golfklubbor',
 ])
 
-const STRICT_PRODUCT_URL_SOURCES = new Set(['scandigolf', 'swegolf', 'golfbutik', 'dimbogolf', 'dimbo-golf'])
+const STRICT_PRODUCT_URL_SOURCES = new Set(['scandigolf', 'swegolf', 'golfbutik', 'dimbogolf', 'dimbo-golf', 'golfbidder'])
 
 function toAbsoluteUrl(baseUrl: string, maybeRelative: string): string | null {
   try {
