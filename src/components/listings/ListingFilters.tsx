@@ -33,7 +33,7 @@ const SOURCES = [
   { value: 'dimbogolf', label: 'Dimbo Golf' },
   { value: 'downswing', label: 'Downswing' },
   { value: 'swegolf', label: 'Swegolf' },
-  { value: 'drivers', label: 'Drivers' },
+  { value: 'drivers_se', label: 'Drivers.se' },
   { value: 'golfbutik', label: 'Golfbutik.se' },
   { value: 'golfprylar', label: 'Golfprylar' },
   { value: 'fjsweden', label: 'FJSweden' },
@@ -48,6 +48,7 @@ const SOURCES = [
   { value: 'golfdeal', label: 'Golfdeal.se' },
   { value: 'golfbidder', label: 'Golfbidder.se' },
   { value: 'golfreuse', label: 'Golfreuse.se' },
+  { value: 'dormy_outlet', label: 'Dormy Outlet' },
 ];
 
 interface ListingFiltersProps {
