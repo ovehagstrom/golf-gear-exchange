@@ -5,7 +5,6 @@ import { ListingCard } from '@/components/listings/ListingCard';
 import { ExternalListingCard, ExternalListing } from '@/components/listings/ExternalListingCard';
 import { ListingFilters, FilterState } from '@/components/listings/ListingFilters';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { supabase } from '@/integrations/supabase/client';
 import { Tables } from '@/integrations/supabase/types';
 import { Loader2 } from 'lucide-react';
