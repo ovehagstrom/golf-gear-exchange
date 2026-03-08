@@ -994,14 +994,14 @@ async function fetchGolfStores(selectedStoreSources: string[] = []): Promise<Ext
 
   const allResults: ExternalListingInput[] = []
 
-  for (let i = 0; i < GOLF_STORES.length; i += concurrency) {
-    const chunk = GOLF_STORES.slice(i, i + concurrency)
+  for (let i = 0; i < storesToRun.length; i += concurrency) {
+    const chunk = storesToRun.slice(i, i + concurrency)
     const chunkResults = await Promise.all(chunk.map(processStore))
     allResults.push(...chunkResults.flat())
   }
 
   const deduped = dedupeListingsBySourceId(allResults)
-  console.log(`[Stores] Total: ${allResults.length} raw, ${deduped.length} unique from ${GOLF_STORES.length} stores`)
+  console.log(`[Stores] Total: ${allResults.length} raw, ${deduped.length} unique from ${storesToRun.length} stores`)
   return deduped
 }
 
