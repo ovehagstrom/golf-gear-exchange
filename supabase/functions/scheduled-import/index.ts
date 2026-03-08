@@ -737,11 +737,13 @@ function isLikelyProductUrl(url: string, storeSource: string): boolean {
 
   if (storeSource === 'golfbidder') {
     if (!value.includes('golfbidder.com/sv/')) return false
-    if (value.includes('/golfklubbor') || value.includes('/soekalternativ') || value.includes('/byt-salj') || value.includes('/guider') || value.includes('/presentkort') || value.includes('/club-finder') || value.includes('/account') || value.includes('/customer') || value.includes('/checkout') || value.includes('/cart')) return false
+    // Exclude known non-product paths
+    const golfbidderExcludes = ['/golfklubbor', '/soekalternativ', '/byt-salj', '/guider', '/presentkort', '/club-finder', '/account', '/customer', '/checkout', '/cart', '/garanti', '/provotid', '/provperiod', '/leverans', '/fragor', '/kontakta', '/subscribe', '/cookie', '/prissattning', '/vardering', '/vad-vi-inte', '/hur-salja', '/om-oss', '/villkor', '/integritet', '/transportor', '/ombud', '/information', '/nyhetsbrev', '/blog', '/nyheter', '/page/', '/byt-s']
+    if (golfbidderExcludes.some(ex => value.includes(ex))) return false
     const afterSv = value.split('/sv/')[1]
     if (!afterSv) return false
-    // Must have a hyphen (brand-model pattern) and no further slashes
-    return !afterSv.includes('/') && afterSv.length > 10 && afterSv.includes('-')
+    // Must have a hyphen (brand-model pattern), no further slashes, and reasonable length
+    return !afterSv.includes('/') && afterSv.length > 10 && afterSv.includes('-') && afterSv.length < 100
   }
 
   return value.includes('/products/') || value.includes('/produkt/')
