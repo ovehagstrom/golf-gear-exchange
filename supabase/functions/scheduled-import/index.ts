@@ -537,6 +537,9 @@ const GOLF_STORES: StoreConfig[] = [
     source: 'swegolf',
     urls: [
       'https://www.swegolf.se/collections/golfklubbor',
+      'https://www.swegolf.se/collections/drivers',
+      'https://www.swegolf.se/collections/jarnset',
+      'https://www.swegolf.se/collections/putters',
     ],
   },
   {
