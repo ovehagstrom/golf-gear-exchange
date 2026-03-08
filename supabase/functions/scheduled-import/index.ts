@@ -873,10 +873,13 @@ async function fetchGolfStores(): Promise<ExternalListingInput[]> {
   const concurrency = 4
 
   const processStore = async (store: StoreConfig): Promise<ExternalListingInput[]> => {
-    const selectedUrls = [
+    const primaryUrls = [
       store.urls[hour % store.urls.length],
       store.urls[(hour + 1) % store.urls.length],
     ].filter((u, i, arr): u is string => Boolean(u) && arr.indexOf(u) === i)
+
+    const homepageFallback = primaryUrls[0] ? toAbsoluteUrl(primaryUrls[0], '/') : null
+    const selectedUrls = Array.from(new Set([...primaryUrls, ...(homepageFallback ? [homepageFallback] : [])]))
 
     let bestProducts: ExternalListingInput[] = []
 
