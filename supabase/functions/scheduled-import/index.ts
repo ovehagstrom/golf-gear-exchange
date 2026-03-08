@@ -679,7 +679,39 @@ const GOLF_STORES: StoreConfig[] = [
   },
 ]
 
-async function scrapeWithFirecrawl(url: string): Promise<string | null> {
+interface ScrapeResult {
+  markdown: string
+  imageCandidates: string[]
+}
+
+function toAbsoluteUrl(baseUrl: string, maybeRelative: string): string | null {
+  try {
+    return new URL(maybeRelative, baseUrl).toString()
+  } catch {
+    return null
+  }
+}
+
+function extractImageUrlsFromHtml(html: string, baseUrl: string): string[] {
+  const urls = new Set<string>()
+  const imgRegex = /<img[^>]+src=["']([^"']+)["']/gi
+  let match: RegExpExecArray | null
+
+  while ((match = imgRegex.exec(html)) !== null) {
+    const raw = match[1]
+    if (!raw || raw.startsWith('data:')) continue
+    const absolute = toAbsoluteUrl(baseUrl, raw)
+    if (!absolute) continue
+
+    if (/\.(jpg|jpeg|png|webp|avif)(\?|$)/i.test(absolute) || absolute.includes('/images/') || absolute.includes('/image/')) {
+      urls.add(absolute)
+    }
+  }
+
+  return Array.from(urls).slice(0, 8)
+}
+
+async function scrapeWithFirecrawl(url: string): Promise<ScrapeResult | null> {
   const apiKey = Deno.env.get('FIRECRAWL_API_KEY')
   if (!apiKey) {
     console.warn('[Firecrawl] FIRECRAWL_API_KEY not set')
@@ -699,7 +731,7 @@ async function scrapeWithFirecrawl(url: string): Promise<string | null> {
       },
       body: JSON.stringify({
         url,
-        formats: ['markdown'],
+        formats: ['markdown', 'html'],
         onlyMainContent: true,
         waitFor: 3000,
       }),
@@ -712,7 +744,14 @@ async function scrapeWithFirecrawl(url: string): Promise<string | null> {
     }
 
     const data = await response.json()
-    return data?.data?.markdown || data?.markdown || null
+    const markdown = data?.data?.markdown || data?.markdown || ''
+    const html = data?.data?.html || data?.html || ''
+    const htmlImages = html ? extractImageUrlsFromHtml(html, url) : []
+
+    return {
+      markdown,
+      imageCandidates: htmlImages,
+    }
   } catch (err) {
     if (err instanceof DOMException && err.name === 'AbortError') {
       console.error(`[Firecrawl] Timeout for ${url}`)
