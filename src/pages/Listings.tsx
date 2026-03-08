@@ -95,7 +95,7 @@ export default function Listings() {
     }
 
     // Fetch external listings
-    if (sourceFilter === 'all' || sourceFilter !== 'golfmarket') {
+    if (!filters.source || filters.source !== 'golfmarket') {
       const fetchExternal = async () => {
         let query = supabase
           .from('external_listings')
