@@ -680,12 +680,46 @@ interface ScrapeResult {
   imageCandidates: string[]
 }
 
+const CATEGORY_ONLY_TITLES = new Set([
+  'drivers', 'driver', 'fairwaywoods', 'fairwaywood', 'hybrider', 'hybrid', 'jarnset', 'järnset',
+  'wedgar', 'wedge', 'putters', 'putter', 'golfpaket', 'custom-set', 'custom set', 'barnklubbor',
+  'enstaka järn', 'lösa juniorklubbor', 'juniorklubbpaket', 'skaft', 'helset', 'klubbor', 'golfklubbor',
+])
+
+const STRICT_PRODUCT_URL_SOURCES = new Set(['scandigolf', 'swegolf', 'golfbutik', 'dimbogolf', 'dimbo-golf'])
+
 function toAbsoluteUrl(baseUrl: string, maybeRelative: string): string | null {
   try {
     return new URL(maybeRelative, baseUrl).toString()
   } catch {
     return null
   }
+}
+
+function normalizeText(input: string): string {
+  return input
+    .toLowerCase()
+    .replace(/[|]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+function isCategoryLikeTitle(title: string): boolean {
+  const normalized = normalizeText(title)
+  if (!normalized) return true
+  if (CATEGORY_ONLY_TITLES.has(normalized)) return true
+
+  const words = normalized.split(' ').filter(Boolean)
+  if (words.length <= 3 && !/\d/.test(normalized) && !/[a-zåäö]{3,}\s+[a-zåäö]{3,}/i.test(title)) {
+    return ['driver', 'drivers', 'jarnset', 'järnset', 'putter', 'putters', 'wedge', 'wedgar', 'hybrid', 'hybrider', 'skaft', 'helset'].some((token) => normalized.includes(token))
+  }
+
+  return false
+}
+
+function hasBlockedImageTokens(url: string): boolean {
+  const value = url.toLowerCase()
+  return ['logo', 'favicon', 'sprite', 'icon', 'placeholder', 'banner'].some((token) => value.includes(token))
 }
 
 function extractImageUrlsFromHtml(html: string, baseUrl: string): string[] {
