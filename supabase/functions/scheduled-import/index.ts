@@ -884,14 +884,15 @@ async function fetchGolfStores(): Promise<ExternalListingInput[]> {
       console.log(`[${store.name}] Scraping URL: ${url}`)
 
       try {
-        const markdown = await scrapeWithFirecrawl(url)
-        if (!markdown || markdown.length < 100) {
+        const scrapeResult = await scrapeWithFirecrawl(url)
+        if (!scrapeResult || !scrapeResult.markdown || scrapeResult.markdown.length < 100) {
           console.warn(`[${store.name}] No content from ${url}`)
           continue
         }
 
-        const fallbackImages = extractImageUrlsFromMarkdown(markdown)
-        const products = await extractProductsFromMarkdown(markdown, store.name, url, fallbackImages)
+        const markdownImages = extractImageUrlsFromMarkdown(scrapeResult.markdown)
+        const fallbackImages = Array.from(new Set([...scrapeResult.imageCandidates, ...markdownImages])).slice(0, 8)
+        const products = await extractProductsFromMarkdown(scrapeResult.markdown, store.name, url, fallbackImages)
 
         for (const p of products) {
           p.source = store.source
