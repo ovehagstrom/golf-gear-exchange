@@ -1059,30 +1059,12 @@ Deno.serve(async (req) => {
     return results
   }
 
-  if (isManual) {
-    // Manual: run in background, return immediately
-    // @ts-ignore - EdgeRuntime is available in Supabase Edge Functions
-    if (typeof EdgeRuntime !== 'undefined' && EdgeRuntime.waitUntil) {
-      // @ts-ignore
-      EdgeRuntime.waitUntil(importTask())
-    } else {
-      await importTask()
-    }
-
-    return new Response(JSON.stringify({
-      success: true,
-      message: 'Import startad i bakgrunden. Kontrollera importhistoriken för resultat.',
-      sources: sourcesToRun,
-    }), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    })
-  }
-
-  // Scheduled/cron or inline: run synchronously to ensure completion
+  // Always run synchronously to ensure completion
+  // EdgeRuntime.waitUntil is unreliable for long-running tasks
   const results = await importTask()
   return new Response(JSON.stringify({
     success: true,
-    message: 'Import klar.',
+    message: isManual ? 'Import klar.' : 'Schemalagd import klar.',
     sources: sourcesToRun,
     results,
   }), {
