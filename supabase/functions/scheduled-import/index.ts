@@ -829,35 +829,50 @@ async function fetchGolfStores(): Promise<ExternalListingInput[]> {
     return []
   }
 
-  // Scrape ALL stores every run, but only one category URL per store to stay within timeout
+  // Scrape ALL stores every run. Use up to 2 fallback URLs per store.
   const hour = new Date().getUTCHours()
   const concurrency = 4
 
   const processStore = async (store: StoreConfig): Promise<ExternalListingInput[]> => {
-    const url = store.urls[hour % store.urls.length]
-    if (!url) return []
+    const selectedUrls = [
+      store.urls[hour % store.urls.length],
+      store.urls[(hour + 1) % store.urls.length],
+    ].filter((u, i, arr): u is string => Boolean(u) && arr.indexOf(u) === i)
 
-    console.log(`[${store.name}] Scraping URL: ${url}`)
+    let bestProducts: ExternalListingInput[] = []
 
-    try {
-      const markdown = await scrapeWithFirecrawl(url)
-      if (!markdown || markdown.length < 100) {
-        console.warn(`[${store.name}] No content from ${url}`)
-        return []
+    for (const url of selectedUrls) {
+      console.log(`[${store.name}] Scraping URL: ${url}`)
+
+      try {
+        const markdown = await scrapeWithFirecrawl(url)
+        if (!markdown || markdown.length < 100) {
+          console.warn(`[${store.name}] No content from ${url}`)
+          continue
+        }
+
+        const fallbackImages = extractImageUrlsFromMarkdown(markdown)
+        const products = await extractProductsFromMarkdown(markdown, store.name, url, fallbackImages)
+
+        for (const p of products) {
+          p.source = store.source
+          p.source_id = `${store.source}-${p.source_id}`
+        }
+
+        console.log(`[${store.name}] Extracted ${products.length} products`)
+
+        if (products.length > bestProducts.length) {
+          bestProducts = products
+        }
+
+        // enough results for this store, skip next fallback URL
+        if (bestProducts.length >= 10) break
+      } catch (err) {
+        console.error(`[${store.name}] Error scraping ${url}:`, err)
       }
-
-      const products = await extractProductsFromMarkdown(markdown, store.name, url)
-      for (const p of products) {
-        p.source = store.source
-        p.source_id = `${store.source}-${p.source_id}`
-      }
-
-      console.log(`[${store.name}] Extracted ${products.length} products`)
-      return products
-    } catch (err) {
-      console.error(`[${store.name}] Error scraping ${url}:`, err)
-      return []
     }
+
+    return bestProducts
   }
 
   const allResults: ExternalListingInput[] = []
