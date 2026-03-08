@@ -102,6 +102,11 @@ export default function Listings() {
           .select('*')
           .eq('is_active', true);
 
+        // Filter by specific external source
+        if (filters.source && filters.source !== 'golfmarket') {
+          query = query.eq('source', filters.source);
+        }
+
         if (filters.category) query = query.eq('category', filters.category);
         if (filters.city) query = query.ilike('city', `%${filters.city}%`);
         if (filters.minPrice > 0) query = query.gte('price', filters.minPrice);
