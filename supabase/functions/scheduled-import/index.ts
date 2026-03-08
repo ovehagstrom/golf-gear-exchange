@@ -1037,7 +1037,12 @@ Max 30 produkter.`,
       if (!title || isCategoryLikeTitle(title)) continue
 
       const rawProductUrl = typeof p.product_url === 'string' ? p.product_url : undefined
-      const resolvedProductUrl = rawProductUrl ? toAbsoluteUrl(sourceUrl, rawProductUrl) : null
+      let resolvedProductUrl = rawProductUrl ? toAbsoluteUrl(sourceUrl, rawProductUrl) : null
+
+      // Normalize Shopify collection URLs: /collections/X/products/Y -> /products/Y
+      if (resolvedProductUrl && (storeSource === 'swegolf' || storeSource === 'scandigolf')) {
+        resolvedProductUrl = resolvedProductUrl.replace(/\/collections\/[^/]+\/products\//, '/products/')
+      }
 
       if (strictSource && (!resolvedProductUrl || !isLikelyProductUrl(resolvedProductUrl, storeSource))) {
         continue
