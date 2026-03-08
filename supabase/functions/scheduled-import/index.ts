@@ -1101,6 +1101,9 @@ Deno.serve(async (req) => {
     if (body.mode === 'inline') {
       forceInline = true
     }
+    if (Array.isArray(body.storeSources)) {
+      storeSources = body.storeSources.filter((s: unknown): s is string => typeof s === 'string')
+    }
   } catch {
     // No body — run all sources
   }
