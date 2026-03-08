@@ -1095,7 +1095,7 @@ Max 30 produkter.`,
       let resolvedProductUrl = rawProductUrl ? toAbsoluteUrl(sourceUrl, rawProductUrl) : null
 
       // Normalize Shopify collection URLs: /collections/X/products/Y -> /products/Y
-      if (resolvedProductUrl && (storeSource === 'swegolf' || storeSource === 'scandigolf')) {
+      if (resolvedProductUrl && storeSource === 'scandigolf') {
         resolvedProductUrl = resolvedProductUrl.replace(/\/collections\/[^/]+\/products\//, '/products/')
       }
 
