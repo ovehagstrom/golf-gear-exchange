@@ -54,6 +54,7 @@ function isKeywordFiltered(title: string, description?: string): boolean {
 
 // Track AI availability — once it fails, skip remaining calls this run
 let aiAvailable = true
+let aiProductExtractionAvailable = true
 
 async function isGolfEquipment(title: string, description?: string): Promise<boolean> {
   if (!aiAvailable) return true // AI already failed this run, accept all
@@ -1067,11 +1068,49 @@ async function extractProductsFromMarkdown(
   sourceUrl: string,
   fallbackImages: string[]
 ): Promise<ExternalListingInput[]> {
+  const cleanedMarkdown = stripFilterNavigation(markdown)
+  const filteredFallbackImages = fallbackImages.filter(isLikelyImageUrl)
+
+  const runRegexFallback = async (): Promise<ExternalListingInput[]> => {
+    const linkProducts = extractProductsFromMarkdownLinks(cleanedMarkdown, storeSource, sourceUrl, filteredFallbackImages)
+    console.log(`[regex-fallback] Found ${linkProducts.length} link products for ${storeSource}`)
+
+    // Keep Golfbidder lighter to avoid memory spikes
+    const enrichLimit = storeSource === 'golfbidder' ? 8 : 15
+    const batchSize = storeSource === 'golfbidder' ? 2 : 3
+
+    const enriched: ExternalListingInput[] = []
+    const toEnrich = linkProducts.slice(0, enrichLimit)
+
+    for (let i = 0; i < toEnrich.length; i += batchSize) {
+      const batch = toEnrich.slice(i, i + batchSize)
+      const metas = await Promise.all(batch.map((p) =>
+        p.source_url ? resolveProductMetaFromUrl(p.source_url) : Promise.resolve({})
+      ))
+
+      for (let j = 0; j < batch.length; j++) {
+        const product = batch[j]
+        const meta = metas[j]
+        if (meta.price) product.price = meta.price
+        if (meta.imageUrl) product.image_urls = [meta.imageUrl]
+        if (storeSource === 'golfbidder' && !product.price) {
+          console.log(`[regex-fallback] Skipped (no price): ${product.source_url}`)
+          continue
+        }
+        enriched.push(product)
+      }
+    }
+
+    console.log(`[regex-fallback] Enriched ${enriched.length} ${storeSource} products`)
+    return enriched
+  }
+
   const apiKey = Deno.env.get('LOVABLE_API_KEY')
-  if (!apiKey) return []
+  if (!apiKey || !aiProductExtractionAvailable) {
+    return await runRegexFallback()
+  }
 
   // Strip filter/navigation content to avoid truncating before products
-  const cleanedMarkdown = stripFilterNavigation(markdown)
   const truncated = cleanedMarkdown.substring(0, 14000)
 
   try {
@@ -1110,31 +1149,10 @@ Max 30 produkter.`
 
     if (!response.ok) {
       console.error(`[AI] Product extraction failed: ${response.status}, using regex fallback`)
-      const linkProducts = extractProductsFromMarkdownLinks(cleanedMarkdown, storeSource, sourceUrl, fallbackImages.filter(isLikelyImageUrl))
-      console.log(`[regex-fallback] Found ${linkProducts.length} link products for ${storeSource}`)
-      
-      // Enrich with price/image — limit to 15 products and batch 3 at a time to save CPU
-      const enriched: ExternalListingInput[] = []
-      const toEnrich = linkProducts.slice(0, 15)
-      for (let i = 0; i < toEnrich.length; i += 3) {
-        const batch = toEnrich.slice(i, i + 3)
-        const metas = await Promise.all(batch.map(p => 
-          p.source_url ? resolveProductMetaFromUrl(p.source_url) : Promise.resolve({})
-        ))
-        for (let j = 0; j < batch.length; j++) {
-          const product = batch[j]
-          const meta = metas[j]
-          if (meta.price) product.price = meta.price
-          if (meta.imageUrl) product.image_urls = [meta.imageUrl]
-          if (storeSource === 'golfbidder' && !product.price) {
-            console.log(`[regex-fallback] Skipped (no price): ${product.source_url}`)
-            continue
-          }
-          enriched.push(product)
-        }
+      if (response.status === 402 || response.status === 429) {
+        aiProductExtractionAvailable = false
       }
-      console.log(`[regex-fallback] Enriched ${enriched.length} ${storeSource} products`)
-      return enriched
+      return await runRegexFallback()
     }
 
     const data = await response.json()
@@ -1146,7 +1164,6 @@ Max 30 produkter.`
     if (!Array.isArray(products)) return []
 
     const strictSource = STRICT_PRODUCT_URL_SOURCES.has(storeSource)
-    const filteredFallbackImages = fallbackImages.filter(isLikelyImageUrl)
     const result: ExternalListingInput[] = []
 
     // Sources where collection pages have lazy-loaded/placeholder images
@@ -1251,7 +1268,8 @@ Max 30 produkter.`
       .slice(0, 30)
   } catch (err) {
     console.error('[AI] Product extraction error:', err)
-    return []
+    aiProductExtractionAvailable = false
+    return await runRegexFallback()
   }
 }
 
@@ -1444,13 +1462,25 @@ Deno.serve(async (req) => {
     if (Array.isArray(body.storeSources)) {
       storeSources = body.storeSources.filter((s: unknown): s is string => typeof s === 'string')
     }
+
+    // Manual runs without explicit store selection focus on Golfbidder to guarantee full category coverage
+    if (isManual && storeSources.length === 0) {
+      storeSources = ['golfbidder']
+    }
   } catch {
     // No body — run all sources
   }
 
+  // Prioritize store scraping first so Golfbidder categories are imported even if runtime budget is tight
+  sourcesToRun = [...new Set(sourcesToRun)].sort((a, b) => {
+    if (a === 'stores') return -1
+    if (b === 'stores') return 1
+    return 0
+  })
+
   const cutoffDate = new Date(Date.now() - maxAgeDays * 24 * 60 * 60 * 1000)
   console.log(
-    `[import] Mode: ${isManual ? 'manual' : 'scheduled'}, maxAgeDays: ${maxAgeDays}, maxListingsPerSource: ${maxListingsPerSource}, cutoff: ${cutoffDate.toISOString()}`
+    `[import] Mode: ${isManual ? 'manual' : 'scheduled'}, maxAgeDays: ${maxAgeDays}, maxListingsPerSource: ${maxListingsPerSource}, sources: ${sourcesToRun.join(', ')}, cutoff: ${cutoffDate.toISOString()}`
   )
 
   const importTask = async () => {
@@ -1472,10 +1502,12 @@ Deno.serve(async (req) => {
         const fetchedListings = source === 'stores'
           ? await fetchGolfStores(storeSources)
           : await fetcher()
-        // Don't limit store products — they're already curated from golf-specific pages
-        const storeLimit = source === 'stores' ? Math.max(maxListingsPerSource, 500) : maxListingsPerSource
-        const listings = sortByPublishedDesc(fetchedListings).slice(0, storeLimit)
-        console.log(`[${source}] Processing ${listings.length}/${fetchedListings.length} listings (limit: ${storeLimit})`)
+        // Keep store imports broad, but cap marketplace processing to avoid worker CPU exhaustion
+        const sourceLimit = source === 'stores'
+          ? Math.max(maxListingsPerSource, 500)
+          : Math.min(maxListingsPerSource, isManual ? 120 : 80)
+        const listings = sortByPublishedDesc(fetchedListings).slice(0, sourceLimit)
+        console.log(`[${source}] Processing ${listings.length}/${fetchedListings.length} listings (limit: ${sourceLimit})`)
 
         for (const listing of listings) {
           if (!listing.source_id || !listing.title || !listing.source_url) {
