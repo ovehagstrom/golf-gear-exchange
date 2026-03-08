@@ -1188,14 +1188,25 @@ async function fetchGolfStores(selectedStoreSources: string[] = []): Promise<Ext
   const hour = new Date().getUTCHours()
   const concurrency = 4
 
-  const processStore = async (store: StoreConfig): Promise<ExternalListingInput[]> => {
-    const primaryUrls = [
-      store.urls[hour % store.urls.length],
-      store.urls[(hour + 1) % store.urls.length],
-    ].filter((u, i, arr): u is string => Boolean(u) && arr.indexOf(u) === i)
+  // Sources with many category URLs should scrape ALL of them each run
+  const SCRAPE_ALL_URLS_SOURCES = new Set(['golfbidder', 'dormy', 'scandigolf', 'golfbutik'])
 
-    const homepageFallback = primaryUrls[0] ? toAbsoluteUrl(primaryUrls[0], '/') : null
-    const selectedUrls = Array.from(new Set([...primaryUrls, ...(homepageFallback ? [homepageFallback] : [])]))
+  const processStore = async (store: StoreConfig): Promise<ExternalListingInput[]> => {
+    let selectedUrls: string[]
+
+    if (SCRAPE_ALL_URLS_SOURCES.has(store.source)) {
+      // Scrape all category URLs for these stores
+      selectedUrls = [...store.urls]
+    } else {
+      // Rotate 2 URLs + homepage fallback for other stores
+      const primaryUrls = [
+        store.urls[hour % store.urls.length],
+        store.urls[(hour + 1) % store.urls.length],
+      ].filter((u, i, arr): u is string => Boolean(u) && arr.indexOf(u) === i)
+
+      const homepageFallback = primaryUrls[0] ? toAbsoluteUrl(primaryUrls[0], '/') : null
+      selectedUrls = Array.from(new Set([...primaryUrls, ...(homepageFallback ? [homepageFallback] : [])]))
+    }
 
     let bestProducts: ExternalListingInput[] = []
 
