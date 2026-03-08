@@ -725,31 +725,29 @@ function hasBlockedImageTokens(url: string): boolean {
 function extractImageUrlsFromHtml(html: string, baseUrl: string): string[] {
   const urls = new Set<string>()
 
-  // Match src, data-src, data-lazy-src, srcset attributes
   const attrRegex = /<img[^>]+(?:src|data-src|data-lazy-src|data-original)=["']([^"']+)["']/gi
   let match: RegExpExecArray | null
 
   while ((match = attrRegex.exec(html)) !== null) {
     const raw = match[1]
-    if (!raw || raw.startsWith('data:') || raw.includes('placeholder') || raw.includes('1x1')) continue
+    if (!raw || raw.startsWith('data:') || hasBlockedImageTokens(raw) || raw.includes('1x1')) continue
     const absolute = toAbsoluteUrl(baseUrl, raw)
     if (!absolute) continue
 
-    if (/\.(jpg|jpeg|png|webp|avif)(\?|$)/i.test(absolute) || absolute.includes('/images/') || absolute.includes('/image/') || absolute.includes('/cdn/') || absolute.includes('shopify') || absolute.includes('cloudinary')) {
+    if (isLikelyImageUrl(absolute)) {
       urls.add(absolute)
     }
   }
 
-  // Also extract from srcset
   const srcsetRegex = /srcset=["']([^"']+)["']/gi
   while ((match = srcsetRegex.exec(html)) !== null) {
     const srcset = match[1]
     const entries = srcset.split(',')
     for (const entry of entries) {
       const imgUrl = entry.trim().split(/\s+/)[0]
-      if (!imgUrl || imgUrl.startsWith('data:')) continue
+      if (!imgUrl || imgUrl.startsWith('data:') || hasBlockedImageTokens(imgUrl)) continue
       const absolute = toAbsoluteUrl(baseUrl, imgUrl)
-      if (absolute && /\.(jpg|jpeg|png|webp|avif)(\?|$)/i.test(absolute)) {
+      if (absolute && isLikelyImageUrl(absolute)) {
         urls.add(absolute)
       }
     }
