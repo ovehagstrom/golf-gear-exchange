@@ -1074,7 +1074,6 @@ Max 30 produkter.`,
 
     const data = await response.json()
     const content = data.choices?.[0]?.message?.content?.trim() || '[]'
-    console.log(`[AI] ${storeName} response (first 300): ${content.substring(0, 300)}`)
     const jsonMatch = content.match(/\[[\s\S]*\]/)
     if (!jsonMatch) return []
 
