@@ -213,40 +213,15 @@ export default function Listings() {
           {/* Filters Sidebar */}
           <aside className="space-y-6">
             <ListingFilters filters={filters} onFiltersChange={handleFiltersChange} />
-            
-            {/* Source filter */}
-            <div className="hidden lg:block space-y-2">
-              <label className="text-sm font-medium">Källa</label>
-              <Select value={sourceFilter} onValueChange={handleSourceChange}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Alla källor</SelectItem>
-                  <SelectItem value="golfmarket">GolfMarket</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
           </aside>
 
           {/* Listings Grid */}
           <div>
             {/* Sort & Results */}
             <div className="flex items-center justify-between mb-6 gap-4 flex-wrap">
-              <div className="flex items-center gap-3">
-                <p className="text-sm text-muted-foreground">
-                  {totalCount} annonser
-                </p>
-                {/* Mobile source tabs */}
-                <div className="lg:hidden">
-                  <Tabs value={sourceFilter} onValueChange={handleSourceChange}>
-                    <TabsList className="h-8">
-                      <TabsTrigger value="all" className="text-xs px-2 h-7">Alla</TabsTrigger>
-                      <TabsTrigger value="golfmarket" className="text-xs px-2 h-7">GolfMarket</TabsTrigger>
-                    </TabsList>
-                  </Tabs>
-                </div>
-              </div>
+              <p className="text-sm text-muted-foreground">
+                {totalCount} annonser
+              </p>
               <Select value={sortBy} onValueChange={setSortBy}>
                 <SelectTrigger className="w-48">
                   <SelectValue placeholder="Sortera" />
