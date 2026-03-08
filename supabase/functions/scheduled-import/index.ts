@@ -1023,7 +1023,7 @@ Max 30 produkter.`,
       const rawProductUrl = typeof p.product_url === 'string' ? p.product_url : undefined
       const resolvedProductUrl = rawProductUrl ? toAbsoluteUrl(sourceUrl, rawProductUrl) : null
 
-      if (strictSource && (!resolvedProductUrl || resolvedProductUrl === sourceUrl)) {
+      if (strictSource && (!resolvedProductUrl || !isLikelyProductUrl(resolvedProductUrl, storeSource))) {
         continue
       }
 
@@ -1056,7 +1056,30 @@ Max 30 produkter.`,
       })
     }
 
-    return result
+    const markdownParsed = extractProductsFromMarkdownLinks(markdown, storeSource, sourceUrl, filteredFallbackImages)
+    const mergedByUrl = new Map<string, ExternalListingInput>()
+
+    for (const item of [...result, ...markdownParsed]) {
+      if (!item.source_url || (strictSource && !isLikelyProductUrl(item.source_url, storeSource))) continue
+
+      const existing = mergedByUrl.get(item.source_url)
+      if (!existing) {
+        mergedByUrl.set(item.source_url, item)
+        continue
+      }
+
+      if ((!existing.image_urls || existing.image_urls.length === 0) && item.image_urls && item.image_urls.length > 0) {
+        existing.image_urls = item.image_urls
+      }
+      if ((!existing.title || existing.title.length < 8) && item.title) {
+        existing.title = item.title
+      }
+      if (!existing.price && item.price) {
+        existing.price = item.price
+      }
+    }
+
+    return Array.from(mergedByUrl.values()).filter((item) => item.title && !isCategoryLikeTitle(item.title)).slice(0, 30)
   } catch (err) {
     console.error('[AI] Product extraction error:', err)
     return []
