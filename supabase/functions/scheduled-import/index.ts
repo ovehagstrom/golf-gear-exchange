@@ -1164,7 +1164,6 @@ Max 30 produkter.`
     if (!Array.isArray(products)) return []
 
     const strictSource = STRICT_PRODUCT_URL_SOURCES.has(storeSource)
-    const filteredFallbackImages = fallbackImages.filter(isLikelyImageUrl)
     const result: ExternalListingInput[] = []
 
     // Sources where collection pages have lazy-loaded/placeholder images
