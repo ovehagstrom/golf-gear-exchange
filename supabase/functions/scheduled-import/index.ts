@@ -1091,10 +1091,7 @@ Max 30 produkter.`,
       if (!p || typeof p !== 'object' || !('title' in p) || typeof p.title !== 'string') continue
 
       const title = (p.title as string).trim()
-      if (!title || isCategoryLikeTitle(title)) {
-        console.log(`[AI] ${storeName}: Skipped category title: "${title}"`)
-        continue
-      }
+      if (!title || isCategoryLikeTitle(title)) continue
 
       const rawProductUrl = typeof p.product_url === 'string' ? p.product_url : undefined
       let resolvedProductUrl = rawProductUrl ? toAbsoluteUrl(sourceUrl, rawProductUrl) : null
