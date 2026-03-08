@@ -789,7 +789,7 @@ function extractProductsFromMarkdownLinks(
     if (!absolute) continue
 
     // Normalize Shopify collection URLs
-    if (storeSource === 'swegolf' || storeSource === 'scandigolf') {
+    if (storeSource === 'scandigolf') {
       absolute = absolute.replace(/\/collections\/[^/]+\/products\//, '/products/')
     }
 
