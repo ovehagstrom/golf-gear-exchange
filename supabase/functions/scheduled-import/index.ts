@@ -810,6 +810,37 @@ function isLikelyImageUrl(url: string): boolean {
   }
 }
 
+async function resolveImageFromProductUrl(productUrl: string): Promise<string | undefined> {
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), 8_000)
+
+  try {
+    const response = await fetch(productUrl, {
+      signal: controller.signal,
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (compatible; GolfMarket/1.0)',
+        'Accept': 'text/html,application/xhtml+xml',
+      },
+    })
+
+    if (!response.ok) return undefined
+    const html = await response.text()
+
+    const ogMatch = html.match(/<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i)
+    if (ogMatch?.[1] && isLikelyImageUrl(ogMatch[1])) return ogMatch[1]
+
+    const twitterMatch = html.match(/<meta[^>]+name=["']twitter:image["'][^>]+content=["']([^"']+)["']/i)
+    if (twitterMatch?.[1] && isLikelyImageUrl(twitterMatch[1])) return twitterMatch[1]
+
+    const htmlImages = extractImageUrlsFromHtml(html, productUrl)
+    return htmlImages.find(isLikelyImageUrl)
+  } catch {
+    return undefined
+  } finally {
+    clearTimeout(timeout)
+  }
+}
+
 async function extractProductsFromMarkdown(
   markdown: string,
   storeName: string,
