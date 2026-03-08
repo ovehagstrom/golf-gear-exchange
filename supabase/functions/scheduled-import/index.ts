@@ -642,7 +642,12 @@ const GOLF_STORES: StoreConfig[] = [
     name: 'Golfbidder',
     source: 'golfbidder',
     urls: [
-      'https://www.golfbidder.se/',
+      'https://www.golfbidder.com/sv/golfklubbor/drivers',
+      'https://www.golfbidder.com/sv/golfklubbor/fairwaywoods',
+      'https://www.golfbidder.com/sv/golfklubbor/hybrider-och-utilityjarn',
+      'https://www.golfbidder.com/sv/golfklubbor/jarnset',
+      'https://www.golfbidder.com/sv/golfklubbor/wedgar',
+      'https://www.golfbidder.com/sv/golfklubbor/putters',
     ],
   },
   {
@@ -686,7 +691,7 @@ const CATEGORY_ONLY_TITLES = new Set([
   'enstaka järn', 'lösa juniorklubbor', 'juniorklubbpaket', 'skaft', 'helset', 'klubbor', 'golfklubbor',
 ])
 
-const STRICT_PRODUCT_URL_SOURCES = new Set(['scandigolf', 'swegolf', 'golfbutik', 'dimbogolf', 'dimbo-golf'])
+const STRICT_PRODUCT_URL_SOURCES = new Set(['scandigolf', 'swegolf', 'golfbutik', 'dimbogolf', 'dimbo-golf', 'golfbidder'])
 
 function toAbsoluteUrl(baseUrl: string, maybeRelative: string): string | null {
   try {
@@ -739,6 +744,15 @@ function isLikelyProductUrl(url: string, storeSource: string): boolean {
     return value.includes('/products/') || value.includes('/produkt/') || value.includes('/shop/')
   }
 
+  if (storeSource === 'golfbidder') {
+    if (!value.includes('golfbidder.com/sv/')) return false
+    if (value.includes('/golfklubbor') || value.includes('/soekalternativ') || value.includes('/byt-salj') || value.includes('/guider') || value.includes('/presentkort') || value.includes('/club-finder') || value.includes('/account') || value.includes('/customer') || value.includes('/checkout') || value.includes('/cart')) return false
+    const afterSv = value.split('/sv/')[1]
+    if (!afterSv) return false
+    // Must have a hyphen (brand-model pattern) and no further slashes
+    return !afterSv.includes('/') && afterSv.length > 10 && afterSv.includes('-')
+  }
+
   return value.includes('/products/') || value.includes('/produkt/')
 }
 
@@ -780,8 +794,15 @@ function extractProductsFromMarkdownLinks(
   let match: RegExpExecArray | null
   while ((match = urlRegex.exec(markdown)) !== null) {
     const rawUrl = match[1]
-    const absolute = toAbsoluteUrl(sourceUrl, rawUrl)
-    if (!absolute || !isLikelyProductUrl(absolute, storeSource)) continue
+    let absolute = toAbsoluteUrl(sourceUrl, rawUrl)
+    if (!absolute) continue
+
+    // Normalize Shopify collection URLs
+    if (storeSource === 'swegolf' || storeSource === 'scandigolf') {
+      absolute = absolute.replace(/\/collections\/[^/]+\/products\//, '/products/')
+    }
+
+    if (!isLikelyProductUrl(absolute, storeSource)) continue
 
     if (!productsByUrl.has(absolute)) {
       const title = titleFromProductUrl(absolute)
@@ -918,6 +939,7 @@ function isLikelyImageUrl(url: string): boolean {
     if (/\.(jpg|jpeg|png|webp|avif|gif)$/.test(pathname)) return true
     if (hostname.includes('cdn.shopify.com') && (pathname.includes('/products/') || pathname.includes('/files/'))) return true
     if (pathname.includes('/products/') && (pathname.includes('/cdn/') || pathname.includes('/media/'))) return true
+    if (hostname.includes('golfbidder.com') && pathname.includes('/media/catalog/product/')) return true
     return false
   } catch {
     return false
@@ -1021,7 +1043,12 @@ Max 30 produkter.`,
       if (!title || isCategoryLikeTitle(title)) continue
 
       const rawProductUrl = typeof p.product_url === 'string' ? p.product_url : undefined
-      const resolvedProductUrl = rawProductUrl ? toAbsoluteUrl(sourceUrl, rawProductUrl) : null
+      let resolvedProductUrl = rawProductUrl ? toAbsoluteUrl(sourceUrl, rawProductUrl) : null
+
+      // Normalize Shopify collection URLs: /collections/X/products/Y -> /products/Y
+      if (resolvedProductUrl && (storeSource === 'swegolf' || storeSource === 'scandigolf')) {
+        resolvedProductUrl = resolvedProductUrl.replace(/\/collections\/[^/]+\/products\//, '/products/')
+      }
 
       if (strictSource && (!resolvedProductUrl || !isLikelyProductUrl(resolvedProductUrl, storeSource))) {
         continue
