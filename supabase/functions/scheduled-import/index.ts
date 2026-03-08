@@ -1068,11 +1068,49 @@ async function extractProductsFromMarkdown(
   sourceUrl: string,
   fallbackImages: string[]
 ): Promise<ExternalListingInput[]> {
+  const cleanedMarkdown = stripFilterNavigation(markdown)
+  const filteredFallbackImages = fallbackImages.filter(isLikelyImageUrl)
+
+  const runRegexFallback = async (): Promise<ExternalListingInput[]> => {
+    const linkProducts = extractProductsFromMarkdownLinks(cleanedMarkdown, storeSource, sourceUrl, filteredFallbackImages)
+    console.log(`[regex-fallback] Found ${linkProducts.length} link products for ${storeSource}`)
+
+    // Keep Golfbidder lighter to avoid memory spikes
+    const enrichLimit = storeSource === 'golfbidder' ? 8 : 15
+    const batchSize = storeSource === 'golfbidder' ? 2 : 3
+
+    const enriched: ExternalListingInput[] = []
+    const toEnrich = linkProducts.slice(0, enrichLimit)
+
+    for (let i = 0; i < toEnrich.length; i += batchSize) {
+      const batch = toEnrich.slice(i, i + batchSize)
+      const metas = await Promise.all(batch.map((p) =>
+        p.source_url ? resolveProductMetaFromUrl(p.source_url) : Promise.resolve({})
+      ))
+
+      for (let j = 0; j < batch.length; j++) {
+        const product = batch[j]
+        const meta = metas[j]
+        if (meta.price) product.price = meta.price
+        if (meta.imageUrl) product.image_urls = [meta.imageUrl]
+        if (storeSource === 'golfbidder' && !product.price) {
+          console.log(`[regex-fallback] Skipped (no price): ${product.source_url}`)
+          continue
+        }
+        enriched.push(product)
+      }
+    }
+
+    console.log(`[regex-fallback] Enriched ${enriched.length} ${storeSource} products`)
+    return enriched
+  }
+
   const apiKey = Deno.env.get('LOVABLE_API_KEY')
-  if (!apiKey) return []
+  if (!apiKey || !aiProductExtractionAvailable) {
+    return await runRegexFallback()
+  }
 
   // Strip filter/navigation content to avoid truncating before products
-  const cleanedMarkdown = stripFilterNavigation(markdown)
   const truncated = cleanedMarkdown.substring(0, 14000)
 
   try {
@@ -1111,31 +1149,10 @@ Max 30 produkter.`
 
     if (!response.ok) {
       console.error(`[AI] Product extraction failed: ${response.status}, using regex fallback`)
-      const linkProducts = extractProductsFromMarkdownLinks(cleanedMarkdown, storeSource, sourceUrl, fallbackImages.filter(isLikelyImageUrl))
-      console.log(`[regex-fallback] Found ${linkProducts.length} link products for ${storeSource}`)
-      
-      // Enrich with price/image — limit to 15 products and batch 3 at a time to save CPU
-      const enriched: ExternalListingInput[] = []
-      const toEnrich = linkProducts.slice(0, 15)
-      for (let i = 0; i < toEnrich.length; i += 3) {
-        const batch = toEnrich.slice(i, i + 3)
-        const metas = await Promise.all(batch.map(p => 
-          p.source_url ? resolveProductMetaFromUrl(p.source_url) : Promise.resolve({})
-        ))
-        for (let j = 0; j < batch.length; j++) {
-          const product = batch[j]
-          const meta = metas[j]
-          if (meta.price) product.price = meta.price
-          if (meta.imageUrl) product.image_urls = [meta.imageUrl]
-          if (storeSource === 'golfbidder' && !product.price) {
-            console.log(`[regex-fallback] Skipped (no price): ${product.source_url}`)
-            continue
-          }
-          enriched.push(product)
-        }
+      if (response.status === 402 || response.status === 429) {
+        aiProductExtractionAvailable = false
       }
-      console.log(`[regex-fallback] Enriched ${enriched.length} ${storeSource} products`)
-      return enriched
+      return await runRegexFallback()
     }
 
     const data = await response.json()
