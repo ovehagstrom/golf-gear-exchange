@@ -19,7 +19,36 @@ export interface FilterState {
   condition: string;
   city: string;
   search: string;
+  source: string;
 }
+
+const SOURCES = [
+  { value: 'golfmarket', label: 'GolfMarket' },
+  { value: 'blocket', label: 'Blocket' },
+  { value: 'tradera', label: 'Tradera' },
+  { value: 'dormy', label: 'Dormy Golf' },
+  { value: 'golfstore', label: 'Golfstore' },
+  { value: 'outofbounds', label: 'Out-of-Bounds' },
+  { value: 'scandigolf', label: 'ScandiGolf' },
+  { value: 'dimbogolf', label: 'Dimbo Golf' },
+  { value: 'downswing', label: 'Downswing' },
+  { value: 'swegolf', label: 'Swegolf' },
+  { value: 'drivers', label: 'Drivers' },
+  { value: 'golfbutik', label: 'Golfbutik.se' },
+  { value: 'golfprylar', label: 'Golfprylar' },
+  { value: 'fjsweden', label: 'FJSweden' },
+  { value: 'njgolf', label: 'NJGolf.se' },
+  { value: 'golfhandeln', label: 'Golfhandeln.se' },
+  { value: 'golfgiganten', label: 'Golfgiganten.se' },
+  { value: 'golfvaruhuset', label: 'Golfvaruhuset.se' },
+  { value: 'nordicgolfers', label: 'NordicGolfers.se' },
+  { value: 'golfimporten', label: 'Golfimporten.se' },
+  { value: 'golfcenter', label: 'Golfcenter.se' },
+  { value: 'golfshopen', label: 'Golfshopen.se' },
+  { value: 'golfdeal', label: 'Golfdeal.se' },
+  { value: 'golfbidder', label: 'Golfbidder.se' },
+  { value: 'golfreuse', label: 'Golfreuse.se' },
+];
 
 interface ListingFiltersProps {
   filters: FilterState;
