@@ -1123,7 +1123,7 @@ Max 30 produkter.`
     const result: ExternalListingInput[] = []
 
     // Sources where collection pages have lazy-loaded/placeholder images
-    const alwaysFetchProductImage = new Set<string>([])
+    const alwaysFetchProductImage = new Set<string>(['golfbidder'])
 
     for (const [index, p] of products.entries()) {
       if (!p || typeof p !== 'object' || !('title' in p) || typeof p.title !== 'string') continue
@@ -1151,10 +1151,26 @@ Max 30 produkter.`
         resolvedImage = aiImageAbsolute
       }
 
-      // For stores with lazy-loaded images, always try to get og:image from product page
-      if ((!resolvedImage || alwaysFetchProductImage.has(storeSource)) && resolvedProductUrl) {
-        const productImage = await resolveImageFromProductUrl(resolvedProductUrl)
-        if (productImage) resolvedImage = productImage
+      let resolvedPrice: number | undefined
+      if (typeof p.price === 'number') {
+        resolvedPrice = Math.round(p.price)
+      } else if (typeof p.price === 'string') {
+        resolvedPrice = extractSekPrice(p.price)
+      }
+
+      // Fetch product page metadata when needed (golfbidder needs robust price/image extraction)
+      const shouldFetchProductMeta = Boolean(
+        resolvedProductUrl && (
+          alwaysFetchProductImage.has(storeSource) ||
+          !resolvedImage ||
+          (storeSource === 'golfbidder' && !resolvedPrice)
+        )
+      )
+
+      if (shouldFetchProductMeta && resolvedProductUrl) {
+        const meta = await resolveProductMetaFromUrl(resolvedProductUrl)
+        if (!resolvedImage && meta.imageUrl) resolvedImage = meta.imageUrl
+        if (!resolvedPrice && meta.price) resolvedPrice = meta.price
       }
 
       const fallbackImage = filteredFallbackImages[index] || filteredFallbackImages[0]
