@@ -722,6 +722,85 @@ function hasBlockedImageTokens(url: string): boolean {
   return ['logo', 'favicon', 'sprite', 'icon', 'placeholder', 'banner'].some((token) => value.includes(token))
 }
 
+function isLikelyProductUrl(url: string, storeSource: string): boolean {
+  const value = url.toLowerCase()
+
+  if (storeSource === 'scandigolf' || storeSource === 'swegolf') {
+    return value.includes('/products/')
+  }
+
+  if (storeSource === 'golfbutik') {
+    if (!value.includes('golfbutik.se/')) return false
+    if (value.includes('/24-') || value.includes('/25-') || value.includes('/26-') || value.includes('/27-') || value.includes('/28-') || value.includes('/29-')) return false
+    return value.includes('.html') || value.includes('/drivers/') || value.includes('/jarnset/') || value.includes('/wedgar/') || value.includes('/putters/')
+  }
+
+  if (storeSource === 'dimbo-golf' || storeSource === 'dimbogolf') {
+    return value.includes('/products/') || value.includes('/produkt/') || value.includes('/shop/')
+  }
+
+  return value.includes('/products/') || value.includes('/produkt/')
+}
+
+function extractProductsFromMarkdownLinks(
+  markdown: string,
+  storeSource: string,
+  sourceUrl: string,
+  fallbackImages: string[]
+): ExternalListingInput[] {
+  const productsByUrl = new Map<string, ExternalListingInput>()
+  const safeFallbackImage = fallbackImages.find(isLikelyImageUrl)
+
+  const imageLinkRegex = /\[!\[[^\]]*\]\((https?:\/\/[^)\s]+)\)\]\((https?:\/\/[^)\s]+)\)/g
+  let match: RegExpExecArray | null
+
+  while ((match = imageLinkRegex.exec(markdown)) !== null) {
+    const imageUrl = match[1]
+    const productUrlRaw = match[2]
+    const productUrl = toAbsoluteUrl(sourceUrl, productUrlRaw)
+    if (!productUrl || !isLikelyProductUrl(productUrl, storeSource)) continue
+
+    if (!productsByUrl.has(productUrl)) {
+      productsByUrl.set(productUrl, {
+        source: storeSource,
+        source_id: `${storeSource}-${productUrl.toLowerCase().replace(/[^a-z0-9]/g, '-').slice(-60)}`,
+        title: '',
+        source_url: productUrl,
+        image_urls: isLikelyImageUrl(imageUrl) ? [imageUrl] : (safeFallbackImage ? [safeFallbackImage] : []),
+        published_at: new Date().toISOString(),
+      })
+    }
+  }
+
+  const headingLinkRegex = /##\s+\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g
+  while ((match = headingLinkRegex.exec(markdown)) !== null) {
+    const title = match[1]?.trim()
+    const productUrlRaw = match[2]
+    const productUrl = toAbsoluteUrl(sourceUrl, productUrlRaw)
+
+    if (!title || isCategoryLikeTitle(title) || !productUrl || !isLikelyProductUrl(productUrl, storeSource)) continue
+
+    const existing = productsByUrl.get(productUrl)
+    if (existing) {
+      existing.title = title
+      continue
+    }
+
+    productsByUrl.set(productUrl, {
+      source: storeSource,
+      source_id: `${storeSource}-${title.toLowerCase().replace(/[^a-z0-9åäö]/g, '-').substring(0, 60)}`,
+      title,
+      source_url: productUrl,
+      image_urls: safeFallbackImage ? [safeFallbackImage] : [],
+      published_at: new Date().toISOString(),
+    })
+  }
+
+  return Array.from(productsByUrl.values())
+    .filter((item) => item.title && !isCategoryLikeTitle(item.title))
+    .slice(0, 30)
+}
+
 function extractImageUrlsFromHtml(html: string, baseUrl: string): string[] {
   const urls = new Set<string>()
 
