@@ -114,6 +114,7 @@ export function ListingFilters({ filters, onFiltersChange }: ListingFiltersProps
       condition: '',
       city: '',
       search: '',
+      source: '',
     });
     setLocalMinPrice('0');
     setLocalMaxPrice('100000');
