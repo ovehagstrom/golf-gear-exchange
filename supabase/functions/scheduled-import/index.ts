@@ -1022,7 +1022,13 @@ async function fetchGolfStores(selectedStoreSources: string[] = []): Promise<Ext
 
         const markdownImages = extractImageUrlsFromMarkdown(scrapeResult.markdown)
         const fallbackImages = Array.from(new Set([...scrapeResult.imageCandidates, ...markdownImages])).slice(0, 8)
-        const products = await extractProductsFromMarkdown(scrapeResult.markdown, store.name, url, fallbackImages)
+        const products = await extractProductsFromMarkdown(
+          scrapeResult.markdown,
+          store.name,
+          store.source,
+          url,
+          fallbackImages
+        )
 
         for (const p of products) {
           p.source = store.source
