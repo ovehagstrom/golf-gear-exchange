@@ -1129,7 +1129,9 @@ Deno.serve(async (req) => {
 
       try {
         console.log(`[${source}] Starting fetch...`)
-        const fetchedListings = await fetcher()
+        const fetchedListings = source === 'stores'
+          ? await fetchGolfStores(storeSources)
+          : await fetcher()
         const listings = sortByPublishedDesc(fetchedListings).slice(0, maxListingsPerSource)
         console.log(`[${source}] Processing ${listings.length}/${fetchedListings.length} listings`)
 
