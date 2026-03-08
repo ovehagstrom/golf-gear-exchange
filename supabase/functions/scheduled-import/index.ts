@@ -1104,11 +1104,6 @@ Max 30 produkter.`,
       }
 
       // Validate URL doesn't 404 for stores with known broken links
-      if (resolvedProductUrl && storeSource === 'swegolf') {
-        const isValid = await validateProductUrl(resolvedProductUrl)
-        if (!isValid) {
-          console.log(`[${storeSource}] ✗ URL 404: ${resolvedProductUrl}`)
-          continue
         }
       }
 
