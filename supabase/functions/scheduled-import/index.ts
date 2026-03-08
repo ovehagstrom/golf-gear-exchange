@@ -1268,7 +1268,8 @@ Max 30 produkter.`
       .slice(0, 30)
   } catch (err) {
     console.error('[AI] Product extraction error:', err)
-    return []
+    aiProductExtractionAvailable = false
+    return await runRegexFallback()
   }
 }
 
