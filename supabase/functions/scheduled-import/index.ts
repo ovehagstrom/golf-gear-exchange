@@ -830,12 +830,15 @@ function extractImageUrlsFromMarkdown(markdown: string): string[] {
 
 function isLikelyImageUrl(url: string): boolean {
   try {
+    if (hasBlockedImageTokens(url)) return false
+
     const parsed = new URL(url)
     const pathname = parsed.pathname.toLowerCase()
     const hostname = parsed.hostname.toLowerCase()
 
-    if (/\.(jpg|jpeg|png|webp|avif|gif|svg)$/.test(pathname)) return true
-    if (hostname.includes('cdn.shopify.com') && pathname.includes('/files/')) return true
+    if (/\.(jpg|jpeg|png|webp|avif|gif)$/.test(pathname)) return true
+    if (hostname.includes('cdn.shopify.com') && (pathname.includes('/products/') || pathname.includes('/files/'))) return true
+    if (pathname.includes('/products/') && (pathname.includes('/cdn/') || pathname.includes('/media/'))) return true
     return false
   } catch {
     return false
