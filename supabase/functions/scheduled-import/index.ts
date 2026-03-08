@@ -1578,8 +1578,22 @@ Deno.serve(async (req) => {
     return results
   }
 
-  // Always run synchronously to ensure completion
-  // EdgeRuntime.waitUntil is unreliable for long-running tasks
+  // Use EdgeRuntime.waitUntil for background processing to avoid CPU limits
+  // @ts-ignore - EdgeRuntime is available in Supabase Edge Functions
+  if (typeof EdgeRuntime !== 'undefined' && EdgeRuntime.waitUntil) {
+    // @ts-ignore
+    EdgeRuntime.waitUntil(importTask())
+    return new Response(JSON.stringify({
+      success: true,
+      message: isManual ? 'Import startad i bakgrunden.' : 'Schemalagd import startad.',
+      sources: sourcesToRun,
+      background: true,
+    }), {
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    })
+  }
+
+  // Fallback: run inline
   const results = await importTask()
   return new Response(JSON.stringify({
     success: true,
