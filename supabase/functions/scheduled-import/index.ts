@@ -725,10 +725,30 @@ async function scrapeWithFirecrawl(url: string): Promise<string | null> {
   }
 }
 
+function extractImageUrlsFromMarkdown(markdown: string): string[] {
+  const urls = new Set<string>()
+
+  const imageRegex = /!\[[^\]]*\]\((https?:\/\/[^)\s]+)\)/g
+  let match: RegExpExecArray | null
+  while ((match = imageRegex.exec(markdown)) !== null) {
+    const url = match[1]
+    if (url && !url.includes('data:image')) urls.add(url)
+  }
+
+  const directImageRegex = /(https?:\/\/[^\s)]+\.(?:jpg|jpeg|png|webp|avif))(?:\?[^\s)]*)?/gi
+  while ((match = directImageRegex.exec(markdown)) !== null) {
+    const url = match[1]
+    if (url && !url.includes('data:image')) urls.add(url)
+  }
+
+  return Array.from(urls).slice(0, 4)
+}
+
 async function extractProductsFromMarkdown(
   markdown: string,
   storeName: string,
-  sourceUrl: string
+  sourceUrl: string,
+  fallbackImages: string[]
 ): Promise<ExternalListingInput[]> {
   const apiKey = Deno.env.get('LOVABLE_API_KEY')
   if (!apiKey) return []
@@ -748,7 +768,7 @@ async function extractProductsFromMarkdown(
           {
             role: 'system',
             content: `Du extraherar golfprodukter från webbsidors innehåll. Svara BARA med en JSON-array med produkter.
-Varje produkt ska ha: title (string), price (number i SEK, utan "kr"), brand (string), category (driver/fairway_wood/hybrid/iron_set/wedge/putter/shaft/complete_set/bag/accessories/other).
+Varje produkt ska ha: title (string), price (number i SEK, utan "kr"), brand (string), category (driver/fairway_wood/hybrid/iron_set/wedge/putter/shaft/complete_set/bag/accessories/other), image_url (string, absolut URL om tillgänglig).
 Inkludera BARA golfklubbor (inte bollar, kläder, skor, bagar, vagnar, tillbehör).
 Om du inte kan hitta några produkter, svara med tom array [].
 Max 30 produkter.`,
@@ -778,18 +798,24 @@ Max 30 produkter.`,
 
     return products
       .filter((p: Record<string, unknown>) => p.title && typeof p.title === 'string')
-      .map((p: Record<string, unknown>) => ({
-        source: storeName.toLowerCase().replace(/[^a-z0-9]/g, '_'),
-        source_id: `${storeName.toLowerCase().replace(/[^a-z0-9]/g, '_')}-${(p.title as string).toLowerCase().replace(/[^a-z0-9åäö]/g, '-').substring(0, 60)}`,
-        title: p.title as string,
-        price: typeof p.price === 'number' ? Math.round(p.price) : undefined,
-        city: undefined,
-        source_url: sourceUrl,
-        image_urls: [],
-        description: undefined,
-        published_at: new Date().toISOString(),
-        category: (p.category as string) || undefined,
-      }))
+      .map((p: Record<string, unknown>, index: number) => {
+        const aiImage = typeof p.image_url === 'string' ? p.image_url : undefined
+        const fallbackImage = fallbackImages[index % Math.max(1, fallbackImages.length)]
+        const chosenImage = aiImage || fallbackImage
+
+        return {
+          source: storeName.toLowerCase().replace(/[^a-z0-9]/g, '_'),
+          source_id: `${storeName.toLowerCase().replace(/[^a-z0-9]/g, '_')}-${(p.title as string).toLowerCase().replace(/[^a-z0-9åäö]/g, '-').substring(0, 60)}`,
+          title: p.title as string,
+          price: typeof p.price === 'number' ? Math.round(p.price) : undefined,
+          city: undefined,
+          source_url: sourceUrl,
+          image_urls: chosenImage ? [chosenImage] : [],
+          description: undefined,
+          published_at: new Date().toISOString(),
+          category: (p.category as string) || undefined,
+        }
+      })
   } catch (err) {
     console.error('[AI] Product extraction error:', err)
     return []
