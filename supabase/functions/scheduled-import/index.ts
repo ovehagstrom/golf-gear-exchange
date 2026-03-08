@@ -52,12 +52,14 @@ function isKeywordFiltered(title: string, description?: string): boolean {
 // AI golf classifier — runs BEFORE spec extraction to save cost
 // ============================================================
 
+// Track AI availability — once it fails, skip remaining calls this run
+let aiAvailable = true
+
 async function isGolfEquipment(title: string, description?: string): Promise<boolean> {
+  if (!aiAvailable) return true // AI already failed this run, accept all
+  
   const apiKey = Deno.env.get('LOVABLE_API_KEY')
-  if (!apiKey) {
-    console.warn('[AI] LOVABLE_API_KEY not set — skipping classification, accepting ad')
-    return true
-  }
+  if (!apiKey) return true
 
   const text = `${title}${description ? '\n' + description : ''}`
 
@@ -86,17 +88,18 @@ async function isGolfEquipment(title: string, description?: string): Promise<boo
     })
 
     if (!response.ok) {
-      console.error(`[AI] Classification failed HTTP ${response.status}`)
-      return true // fail-open: accept if AI is down
+      console.error(`[AI] Classification failed HTTP ${response.status} — disabling AI for this run`)
+      aiAvailable = false
+      return true // fail-open
     }
 
     const data = await response.json()
     const answer = (data.choices?.[0]?.message?.content ?? '').trim().toUpperCase()
-    console.log(`[AI] Classification for "${title.substring(0, 40)}": ${answer}`)
     return answer.startsWith('JA')
   } catch (err) {
     console.error('[AI] Classification error:', err)
-    return true // fail-open
+    aiAvailable = false
+    return true
   }
 }
 
@@ -1453,8 +1456,8 @@ Deno.serve(async (req) => {
   const importTask = async () => {
     const results: Record<string, ImportStats> = {}
 
-    // Run all sources IN PARALLEL to avoid timeout
-    const sourcePromises = sourcesToRun.map(async (source) => {
+    // Run sources SEQUENTIALLY to reduce memory usage
+    for (const source of sourcesToRun) {
       const fetcher = SOURCE_FETCHERS[source]
       const stats: ImportStats = {
         imported: 0,
@@ -1488,12 +1491,9 @@ Deno.serve(async (req) => {
             }
           }
 
-          // Skip keyword filter and AI classification for store products 
-          // (they come from golf-specific pages, so they're always golf)
           const isStoreProduct = source === 'stores'
 
           if (!isStoreProduct && isKeywordFiltered(listing.title, listing.description)) {
-            console.log(`[${source}] ✗ Keyword filtered: "${listing.title.substring(0, 50)}"`)
             stats.skipped_keyword_filtered++
             continue
           }
@@ -1501,14 +1501,13 @@ Deno.serve(async (req) => {
           if (!isStoreProduct) {
             const isGolf = await isGolfEquipment(listing.title, listing.description)
             if (!isGolf) {
-              console.log(`[${source}] ✗ AI rejected (not golf): "${listing.title.substring(0, 50)}"`)
               stats.skipped_non_golf++
               continue
             }
           }
 
           const specs = isStoreProduct 
-            ? {} // Store products already have category from AI extraction
+            ? {}
             : await extractSpecs(listing.title, listing.description)
 
           let finalImageUrls = listing.image_urls || []
@@ -1521,7 +1520,6 @@ Deno.serve(async (req) => {
               listing.source_id,
               finalImageUrls
             )
-
             if (cachedUrls.length > 0) {
               finalImageUrls = cachedUrls
             }
@@ -1572,9 +1570,8 @@ Deno.serve(async (req) => {
 
       results[source] = stats
       console.log(`[${source}] Done: imported=${stats.imported}, keyword_filtered=${stats.skipped_keyword_filtered}, ai_rejected=${stats.skipped_non_golf}, skipped=${stats.skipped_duplicates}`)
-    })
+    }
 
-    await Promise.all(sourcePromises)
     return results
   }
 
