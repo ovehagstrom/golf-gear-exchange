@@ -52,12 +52,14 @@ function isKeywordFiltered(title: string, description?: string): boolean {
 // AI golf classifier — runs BEFORE spec extraction to save cost
 // ============================================================
 
+// Track AI availability — once it fails, skip remaining calls this run
+let aiAvailable = true
+
 async function isGolfEquipment(title: string, description?: string): Promise<boolean> {
+  if (!aiAvailable) return true // AI already failed this run, accept all
+  
   const apiKey = Deno.env.get('LOVABLE_API_KEY')
-  if (!apiKey) {
-    console.warn('[AI] LOVABLE_API_KEY not set — skipping classification, accepting ad')
-    return true
-  }
+  if (!apiKey) return true
 
   const text = `${title}${description ? '\n' + description : ''}`
 
@@ -86,17 +88,18 @@ async function isGolfEquipment(title: string, description?: string): Promise<boo
     })
 
     if (!response.ok) {
-      console.error(`[AI] Classification failed HTTP ${response.status}`)
-      return true // fail-open: accept if AI is down
+      console.error(`[AI] Classification failed HTTP ${response.status} — disabling AI for this run`)
+      aiAvailable = false
+      return true // fail-open
     }
 
     const data = await response.json()
     const answer = (data.choices?.[0]?.message?.content ?? '').trim().toUpperCase()
-    console.log(`[AI] Classification for "${title.substring(0, 40)}": ${answer}`)
     return answer.startsWith('JA')
   } catch (err) {
     console.error('[AI] Classification error:', err)
-    return true // fail-open
+    aiAvailable = false
+    return true
   }
 }
 
