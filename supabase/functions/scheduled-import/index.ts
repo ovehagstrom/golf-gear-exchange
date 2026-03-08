@@ -537,6 +537,9 @@ const GOLF_STORES: StoreConfig[] = [
     source: 'swegolf',
     urls: [
       'https://www.swegolf.se/collections/golfklubbor',
+      'https://www.swegolf.se/collections/drivers',
+      'https://www.swegolf.se/collections/jarnset',
+      'https://www.swegolf.se/collections/putters',
     ],
   },
   {
@@ -563,13 +566,6 @@ const GOLF_STORES: StoreConfig[] = [
       'https://golfbutik.se/27-jarnset',
       'https://golfbutik.se/28-wedgar',
       'https://golfbutik.se/29-putters',
-    ],
-  },
-  {
-    name: 'Golfprylar',
-    source: 'golfprylar',
-    urls: [
-      'https://www.golfprylar.se/golfklubbor',
     ],
   },
   {
@@ -694,21 +690,38 @@ function toAbsoluteUrl(baseUrl: string, maybeRelative: string): string | null {
 
 function extractImageUrlsFromHtml(html: string, baseUrl: string): string[] {
   const urls = new Set<string>()
-  const imgRegex = /<img[^>]+src=["']([^"']+)["']/gi
+
+  // Match src, data-src, data-lazy-src, srcset attributes
+  const attrRegex = /<img[^>]+(?:src|data-src|data-lazy-src|data-original)=["']([^"']+)["']/gi
   let match: RegExpExecArray | null
 
-  while ((match = imgRegex.exec(html)) !== null) {
+  while ((match = attrRegex.exec(html)) !== null) {
     const raw = match[1]
-    if (!raw || raw.startsWith('data:')) continue
+    if (!raw || raw.startsWith('data:') || raw.includes('placeholder') || raw.includes('1x1')) continue
     const absolute = toAbsoluteUrl(baseUrl, raw)
     if (!absolute) continue
 
-    if (/\.(jpg|jpeg|png|webp|avif)(\?|$)/i.test(absolute) || absolute.includes('/images/') || absolute.includes('/image/')) {
+    if (/\.(jpg|jpeg|png|webp|avif)(\?|$)/i.test(absolute) || absolute.includes('/images/') || absolute.includes('/image/') || absolute.includes('/cdn/') || absolute.includes('shopify') || absolute.includes('cloudinary')) {
       urls.add(absolute)
     }
   }
 
-  return Array.from(urls).slice(0, 8)
+  // Also extract from srcset
+  const srcsetRegex = /srcset=["']([^"']+)["']/gi
+  while ((match = srcsetRegex.exec(html)) !== null) {
+    const srcset = match[1]
+    const entries = srcset.split(',')
+    for (const entry of entries) {
+      const imgUrl = entry.trim().split(/\s+/)[0]
+      if (!imgUrl || imgUrl.startsWith('data:')) continue
+      const absolute = toAbsoluteUrl(baseUrl, imgUrl)
+      if (absolute && /\.(jpg|jpeg|png|webp|avif)(\?|$)/i.test(absolute)) {
+        urls.add(absolute)
+      }
+    }
+  }
+
+  return Array.from(urls).slice(0, 12)
 }
 
 async function scrapeWithFirecrawl(url: string): Promise<ScrapeResult | null> {
@@ -733,7 +746,7 @@ async function scrapeWithFirecrawl(url: string): Promise<ScrapeResult | null> {
         url,
         formats: ['markdown', 'html'],
         onlyMainContent: true,
-        waitFor: 3000,
+        waitFor: 5000,
       }),
     })
 
