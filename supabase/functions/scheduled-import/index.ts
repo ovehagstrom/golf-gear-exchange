@@ -1102,7 +1102,6 @@ Max 30 produkter.`,
       }
 
       if (strictSource && (!resolvedProductUrl || !isLikelyProductUrl(resolvedProductUrl, storeSource))) {
-        console.log(`[AI] ${storeName}: Skipped non-product URL: "${resolvedProductUrl}" for "${title}"`)
         continue
       }
 
