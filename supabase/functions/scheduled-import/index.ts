@@ -1086,13 +1086,14 @@ async function extractProductsFromMarkdown(
             content: `Du extraherar golfprodukter från webbsidors innehåll. Svara BARA med en JSON-array med produkter.
 Varje produkt ska ha: title (string), price (number i SEK, utan "kr"), brand (string), category (driver/fairway_wood/hybrid/iron_set/wedge/putter/shaft/complete_set/bag/accessories/other), product_url (string, absolut eller relativ URL till PRODUKT), image_url (string, absolut URL om tillgänglig).
 VIKTIGT:
-- Inkludera BARA riktiga produktsidor, inte kategorier, menyer eller filtreringslänkar.
+- Inkludera BARA riktiga produktsidor, inte kategorier, menyer, guider, FAQ eller policy-sidor.
 - Inkludera BARA golfklubbor (inte bollar, kläder, skor, bagar, vagnar, tillbehör).
+- Inkludera endast produkter som har ett faktiskt pris > 0.
 - Om du inte kan hitta några produkter, svara med tom array [].
 - Priser kan vara i format "2 131,99 kr" (mellanslag som tusentalsseparator, komma som decimaltecken). Konvertera till heltal i SEK (t.ex. 2132).
 - Priser kan stå ihop med annan text, t.ex. "2022Begagnat från2 131,99 kr" — extrahera priset 2132.
 - Bildlänkar kan vara i markdown-format som ![alt](url) — extrahera URL:en.
-Max 30 produkter.`,
+Max 30 produkter.`
           },
           {
             role: 'user',
