@@ -127,6 +127,7 @@ export function ListingFilters({ filters, onFiltersChange }: ListingFiltersProps
     filters.shaftFlex,
     filters.condition,
     filters.city,
+    filters.source,
     filters.minPrice > 0 ? 'price' : '',
     filters.maxPrice < 100000 ? 'price' : '',
   ].filter(Boolean).length;
