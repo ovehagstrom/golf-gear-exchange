@@ -939,7 +939,33 @@ function isLikelyImageUrl(url: string): boolean {
   }
 }
 
-async function resolveImageFromProductUrl(productUrl: string): Promise<string | undefined> {
+function extractSekPrice(raw: string | null | undefined): number | undefined {
+  if (!raw) return undefined
+
+  const cleaned = raw
+    .replace(/\u00a0/g, ' ')
+    .replace(/kr/gi, ' ')
+    .replace(/sek/gi, ' ')
+    .trim()
+
+  // Keep only digits, separators and spaces. Supports formats like "2 131,99" or "2,131.99"
+  const numeric = cleaned.replace(/[^0-9.,\s]/g, '')
+  if (!numeric) return undefined
+
+  // Swedish style first: 2 131,99
+  const swedish = numeric.replace(/\s+/g, '').replace(/\./g, '').replace(',', '.')
+  const swedishValue = Number(swedish)
+  if (Number.isFinite(swedishValue) && swedishValue > 0) return Math.round(swedishValue)
+
+  // Fallback: 2,131.99
+  const intl = numeric.replace(/\s+/g, '').replace(/,/g, '')
+  const intlValue = Number(intl)
+  if (Number.isFinite(intlValue) && intlValue > 0) return Math.round(intlValue)
+
+  return undefined
+}
+
+async function resolveProductMetaFromUrl(productUrl: string): Promise<{ imageUrl?: string; price?: number }> {
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), 8_000)
 
@@ -952,19 +978,30 @@ async function resolveImageFromProductUrl(productUrl: string): Promise<string | 
       },
     })
 
-    if (!response.ok) return undefined
+    if (!response.ok) return {}
     const html = await response.text()
 
     const ogMatch = html.match(/<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i)
-    if (ogMatch?.[1] && isLikelyImageUrl(ogMatch[1])) return ogMatch[1]
-
     const twitterMatch = html.match(/<meta[^>]+name=["']twitter:image["'][^>]+content=["']([^"']+)["']/i)
-    if (twitterMatch?.[1] && isLikelyImageUrl(twitterMatch[1])) return twitterMatch[1]
+    const htmlImage = extractImageUrlsFromHtml(html, productUrl).find(isLikelyImageUrl)
 
-    const htmlImages = extractImageUrlsFromHtml(html, productUrl)
-    return htmlImages.find(isLikelyImageUrl)
+    const imageUrl = [ogMatch?.[1], twitterMatch?.[1], htmlImage]
+      .find((url) => Boolean(url) && isLikelyImageUrl(url!))
+
+    // Capture common Golfbidder price patterns (including merged text from rendered markup)
+    const priceMatch =
+      html.match(/Begagnat\s*från\s*([0-9\s.,]+)\s*kr/i) ||
+      html.match(/Från\s*([0-9\s.,]+)\s*kr/i) ||
+      html.match(/([0-9][0-9\s.,]{1,20})\s*kr/i)
+
+    const price = extractSekPrice(priceMatch?.[1])
+
+    return {
+      imageUrl: imageUrl || undefined,
+      price,
+    }
   } catch {
-    return undefined
+    return {}
   } finally {
     clearTimeout(timeout)
   }
@@ -1049,13 +1086,14 @@ async function extractProductsFromMarkdown(
             content: `Du extraherar golfprodukter från webbsidors innehåll. Svara BARA med en JSON-array med produkter.
 Varje produkt ska ha: title (string), price (number i SEK, utan "kr"), brand (string), category (driver/fairway_wood/hybrid/iron_set/wedge/putter/shaft/complete_set/bag/accessories/other), product_url (string, absolut eller relativ URL till PRODUKT), image_url (string, absolut URL om tillgänglig).
 VIKTIGT:
-- Inkludera BARA riktiga produktsidor, inte kategorier, menyer eller filtreringslänkar.
+- Inkludera BARA riktiga produktsidor, inte kategorier, menyer, guider, FAQ eller policy-sidor.
 - Inkludera BARA golfklubbor (inte bollar, kläder, skor, bagar, vagnar, tillbehör).
+- Inkludera endast produkter som har ett faktiskt pris > 0.
 - Om du inte kan hitta några produkter, svara med tom array [].
 - Priser kan vara i format "2 131,99 kr" (mellanslag som tusentalsseparator, komma som decimaltecken). Konvertera till heltal i SEK (t.ex. 2132).
 - Priser kan stå ihop med annan text, t.ex. "2022Begagnat från2 131,99 kr" — extrahera priset 2132.
 - Bildlänkar kan vara i markdown-format som ![alt](url) — extrahera URL:en.
-Max 30 produkter.`,
+Max 30 produkter.`
           },
           {
             role: 'user',
@@ -1085,7 +1123,7 @@ Max 30 produkter.`,
     const result: ExternalListingInput[] = []
 
     // Sources where collection pages have lazy-loaded/placeholder images
-    const alwaysFetchProductImage = new Set<string>([])
+    const alwaysFetchProductImage = new Set<string>(['golfbidder'])
 
     for (const [index, p] of products.entries()) {
       if (!p || typeof p !== 'object' || !('title' in p) || typeof p.title !== 'string') continue
@@ -1113,10 +1151,31 @@ Max 30 produkter.`,
         resolvedImage = aiImageAbsolute
       }
 
-      // For stores with lazy-loaded images, always try to get og:image from product page
-      if ((!resolvedImage || alwaysFetchProductImage.has(storeSource)) && resolvedProductUrl) {
-        const productImage = await resolveImageFromProductUrl(resolvedProductUrl)
-        if (productImage) resolvedImage = productImage
+      let resolvedPrice: number | undefined
+      if (typeof p.price === 'number') {
+        resolvedPrice = Math.round(p.price)
+      } else if (typeof p.price === 'string') {
+        resolvedPrice = extractSekPrice(p.price)
+      }
+
+      // Fetch product page metadata when needed (golfbidder needs robust price/image extraction)
+      const shouldFetchProductMeta = Boolean(
+        resolvedProductUrl && (
+          alwaysFetchProductImage.has(storeSource) ||
+          !resolvedImage ||
+          (storeSource === 'golfbidder' && !resolvedPrice)
+        )
+      )
+
+      if (shouldFetchProductMeta && resolvedProductUrl) {
+        const meta = await resolveProductMetaFromUrl(resolvedProductUrl)
+        if (!resolvedImage && meta.imageUrl) resolvedImage = meta.imageUrl
+        if (!resolvedPrice && meta.price) resolvedPrice = meta.price
+      }
+
+      // Golfbidder: require valid product price to avoid importing policy/info pages
+      if (storeSource === 'golfbidder' && !resolvedPrice) {
+        continue
       }
 
       const fallbackImage = filteredFallbackImages[index] || filteredFallbackImages[0]
@@ -1126,7 +1185,7 @@ Max 30 produkter.`,
         source: storeSource,
         source_id: `${storeSource}-${title.toLowerCase().replace(/[^a-z0-9åäö]/g, '-').substring(0, 60)}`,
         title,
-        price: typeof p.price === 'number' ? Math.round(p.price) : undefined,
+        price: resolvedPrice,
         city: undefined,
         source_url: resolvedProductUrl || sourceUrl,
         image_urls: chosenImage ? [chosenImage] : [],
@@ -1136,11 +1195,14 @@ Max 30 produkter.`,
       })
     }
 
-    const markdownParsed = extractProductsFromMarkdownLinks(cleanedMarkdown, storeSource, sourceUrl, filteredFallbackImages)
+    const markdownParsed = storeSource === 'golfbidder'
+      ? []
+      : extractProductsFromMarkdownLinks(cleanedMarkdown, storeSource, sourceUrl, filteredFallbackImages)
     const mergedByUrl = new Map<string, ExternalListingInput>()
 
     for (const item of [...result, ...markdownParsed]) {
       if (!item.source_url || (strictSource && !isLikelyProductUrl(item.source_url, storeSource))) continue
+      if (storeSource === 'golfbidder' && !item.price) continue
 
       const existing = mergedByUrl.get(item.source_url)
       if (!existing) {
@@ -1159,7 +1221,9 @@ Max 30 produkter.`,
       }
     }
 
-    return Array.from(mergedByUrl.values()).filter((item) => item.title && !isCategoryLikeTitle(item.title)).slice(0, 30)
+    return Array.from(mergedByUrl.values())
+      .filter((item) => item.title && !isCategoryLikeTitle(item.title) && (storeSource !== 'golfbidder' || Boolean(item.price)))
+      .slice(0, 30)
   } catch (err) {
     console.error('[AI] Product extraction error:', err)
     return []
