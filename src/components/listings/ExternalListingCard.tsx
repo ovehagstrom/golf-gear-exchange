@@ -1,5 +1,7 @@
+import { Link } from 'react-router-dom';
 import { MapPin, Clock, ExternalLink } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
+import { CATEGORIES } from '@/lib/constants';
 
 interface ExternalListing {
   id: string;
@@ -25,7 +27,11 @@ interface ExternalListingCardProps {
 const SOURCE_LABELS: Record<string, string> = {
   blocket: 'Blocket',
   tradera: 'Tradera',
-  facebook: 'Facebook Marketplace',
+  facebook: 'Facebook',
+  golfbidder: 'Golfbidder',
+  scandigolf: 'ScandiGolf',
+  golfbutik: 'Golfbutik',
+  dormy: 'Dormy',
 };
 
 export function ExternalListingCard({ listing }: ExternalListingCardProps) {
@@ -59,23 +65,13 @@ export function ExternalListingCard({ listing }: ExternalListingCardProps) {
 
   const sourceLabel = SOURCE_LABELS[listing.source] || listing.source;
   const specs = listing.specs_json || {};
+  const category = CATEGORIES.find((c) => c.value === listing.category);
 
   return (
-    <a
-      href={listing.source_url}
-      target="_blank"
-      rel="noopener noreferrer"
-      className="block group"
-    >
-      <article className="golf-card-premium overflow-hidden relative">
-        {/* External source badge */}
-        <div className="absolute top-0 left-0 right-0 z-10 bg-accent/90 text-accent-foreground text-xs font-medium py-1 px-3 flex items-center gap-1.5">
-          <ExternalLink className="h-3 w-3" />
-          Extern annons – Källa: {sourceLabel}
-        </div>
-
+    <Link to={`/external/${listing.id}`} className="block group">
+      <article className="golf-card-premium overflow-hidden">
         {/* Image */}
-        <div className="aspect-[4/3] relative overflow-hidden bg-muted pt-6">
+        <div className="aspect-[4/3] relative overflow-hidden bg-muted">
           {listing.image_urls && listing.image_urls.length > 0 ? (
             <img
               src={listing.image_urls[0]}
@@ -86,6 +82,23 @@ export function ExternalListingCard({ listing }: ExternalListingCardProps) {
           ) : (
             <div className="w-full h-full flex items-center justify-center text-muted-foreground">
               <span className="text-4xl">⛳</span>
+            </div>
+          )}
+
+          {/* Source badge — top left */}
+          <div className="absolute top-3 left-3">
+            <Badge variant="secondary" className="bg-accent/90 text-accent-foreground text-xs backdrop-blur-sm">
+              <ExternalLink className="h-3 w-3 mr-1" />
+              {sourceLabel}
+            </Badge>
+          </div>
+
+          {/* Category badge — top right */}
+          {category && (
+            <div className="absolute top-3 right-3">
+              <Badge variant="secondary" className="bg-background/90 backdrop-blur-sm">
+                {category.label}
+              </Badge>
             </div>
           )}
         </div>
@@ -99,12 +112,12 @@ export function ExternalListingCard({ listing }: ExternalListingCardProps) {
                 {specs.brand}
               </p>
             )}
-            <h3 className="font-semibold text-foreground line-clamp-2 group-hover:text-primary transition-colors">
+            <h3 className="font-semibold text-foreground line-clamp-1 group-hover:text-primary transition-colors">
               {listing.title}
             </h3>
           </div>
 
-          {/* Extracted specs */}
+          {/* Specs */}
           <div className="flex flex-wrap gap-1.5">
             {specs.model && (
               <Badge variant="outline" className="text-xs font-normal">
@@ -148,7 +161,7 @@ export function ExternalListingCard({ listing }: ExternalListingCardProps) {
           </div>
         </div>
       </article>
-    </a>
+    </Link>
   );
 }
 

@@ -28,6 +28,7 @@ import Help from "./pages/Help";
 import Safety from "./pages/Safety";
 import FAQ from "./pages/FAQ";
 import SubmitListing from "./pages/SubmitListing";
+import ExternalListingDetail from "./pages/ExternalListingDetail";
 
 const queryClient = new QueryClient();
 
@@ -44,6 +45,7 @@ const App = () => (
             <Route path="/listings" element={<Listings />} />
             <Route path="/listings/new" element={<NewListing />} />
             <Route path="/listings/:id" element={<ListingDetail />} />
+            <Route path="/external/:id" element={<ExternalListingDetail />} />
             <Route path="/messages" element={<Messages />} />
             <Route path="/messages/:id" element={<Conversation />} />
             <Route path="/profile" element={<Profile />} />
