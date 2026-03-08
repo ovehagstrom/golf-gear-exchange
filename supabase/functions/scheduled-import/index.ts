@@ -1103,10 +1103,6 @@ Max 30 produkter.`,
         continue
       }
 
-      // Validate URL doesn't 404 for stores with known broken links
-        }
-      }
-
       const aiImageRaw = typeof p.image_url === 'string' ? p.image_url : undefined
       const aiImageAbsolute = aiImageRaw ? toAbsoluteUrl(sourceUrl, aiImageRaw) : null
 
