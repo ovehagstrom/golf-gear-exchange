@@ -54,7 +54,7 @@ export default function Listings() {
 
   useEffect(() => {
     fetchListings();
-  }, [filters, sortBy, sourceFilter]);
+  }, [filters, sortBy]);
 
   const fetchListings = async () => {
     setLoading(true);
