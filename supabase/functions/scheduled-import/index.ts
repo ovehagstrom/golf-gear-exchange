@@ -1265,7 +1265,7 @@ async function fetchGolfStores(selectedStoreSources: string[] = []): Promise<Ext
 
   // Scrape selected stores every run. Use up to 2 fallback URLs per store.
   const hour = new Date().getUTCHours()
-  const concurrency = 4
+  const concurrency = 2 // Lower concurrency to stay within CPU limits
 
   // Sources with many category URLs should scrape ALL of them each run
   const SCRAPE_ALL_URLS_SOURCES = new Set(['golfbidder', 'dormy', 'scandigolf', 'golfbutik'])
