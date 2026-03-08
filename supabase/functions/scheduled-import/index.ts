@@ -1080,7 +1080,6 @@ Max 30 produkter.`,
     const products = JSON.parse(jsonMatch[0])
     if (!Array.isArray(products)) return []
 
-    console.log(`[AI] ${storeName}: AI returned ${products.length} products`)
     const strictSource = STRICT_PRODUCT_URL_SOURCES.has(storeSource)
     const filteredFallbackImages = fallbackImages.filter(isLikelyImageUrl)
     const result: ExternalListingInput[] = []
