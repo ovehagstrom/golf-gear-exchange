@@ -19,7 +19,36 @@ export interface FilterState {
   condition: string;
   city: string;
   search: string;
+  source: string;
 }
+
+const SOURCES = [
+  { value: 'golfmarket', label: 'GolfMarket' },
+  { value: 'blocket', label: 'Blocket' },
+  { value: 'tradera', label: 'Tradera' },
+  { value: 'dormy', label: 'Dormy Golf' },
+  { value: 'golfstore', label: 'Golfstore' },
+  { value: 'outofbounds', label: 'Out-of-Bounds' },
+  { value: 'scandigolf', label: 'ScandiGolf' },
+  { value: 'dimbogolf', label: 'Dimbo Golf' },
+  { value: 'downswing', label: 'Downswing' },
+  { value: 'swegolf', label: 'Swegolf' },
+  { value: 'drivers', label: 'Drivers' },
+  { value: 'golfbutik', label: 'Golfbutik.se' },
+  { value: 'golfprylar', label: 'Golfprylar' },
+  { value: 'fjsweden', label: 'FJSweden' },
+  { value: 'njgolf', label: 'NJGolf.se' },
+  { value: 'golfhandeln', label: 'Golfhandeln.se' },
+  { value: 'golfgiganten', label: 'Golfgiganten.se' },
+  { value: 'golfvaruhuset', label: 'Golfvaruhuset.se' },
+  { value: 'nordicgolfers', label: 'NordicGolfers.se' },
+  { value: 'golfimporten', label: 'Golfimporten.se' },
+  { value: 'golfcenter', label: 'Golfcenter.se' },
+  { value: 'golfshopen', label: 'Golfshopen.se' },
+  { value: 'golfdeal', label: 'Golfdeal.se' },
+  { value: 'golfbidder', label: 'Golfbidder.se' },
+  { value: 'golfreuse', label: 'Golfreuse.se' },
+];
 
 interface ListingFiltersProps {
   filters: FilterState;
@@ -85,6 +114,7 @@ export function ListingFilters({ filters, onFiltersChange }: ListingFiltersProps
       condition: '',
       city: '',
       search: '',
+      source: '',
     });
     setLocalMinPrice('0');
     setLocalMaxPrice('100000');
@@ -97,6 +127,7 @@ export function ListingFilters({ filters, onFiltersChange }: ListingFiltersProps
     filters.shaftFlex,
     filters.condition,
     filters.city,
+    filters.source,
     filters.minPrice > 0 ? 'price' : '',
     filters.maxPrice < 100000 ? 'price' : '',
   ].filter(Boolean).length;
@@ -227,6 +258,22 @@ export function ListingFilters({ filters, onFiltersChange }: ListingFiltersProps
             <SelectItem value="all">Hela Sverige</SelectItem>
             {SWEDISH_CITIES.map((city) => (
               <SelectItem key={city} value={city}>{city}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
+      {/* Source */}
+      <div className="space-y-2">
+        <Label>Källa</Label>
+        <Select value={filters.source || "all"} onValueChange={(v) => updateFilter('source', v === "all" ? "" : v)}>
+          <SelectTrigger>
+            <SelectValue placeholder="Alla källor" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Alla källor</SelectItem>
+            {SOURCES.map((s) => (
+              <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>
             ))}
           </SelectContent>
         </Select>

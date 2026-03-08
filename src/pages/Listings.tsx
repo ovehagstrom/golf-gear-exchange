@@ -5,7 +5,6 @@ import { ListingCard } from '@/components/listings/ListingCard';
 import { ExternalListingCard, ExternalListing } from '@/components/listings/ExternalListingCard';
 import { ListingFilters, FilterState } from '@/components/listings/ListingFilters';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { supabase } from '@/integrations/supabase/client';
 import { Tables } from '@/integrations/supabase/types';
 import { Loader2 } from 'lucide-react';
@@ -24,7 +23,6 @@ export default function Listings() {
   const [externalListings, setExternalListings] = useState<ExternalListing[]>([]);
   const [loading, setLoading] = useState(true);
   const [sortBy, setSortBy] = useState('newest');
-  const [sourceFilter, setSourceFilter] = useState(searchParams.get('source') || 'all');
 
   const [filters, setFilters] = useState<FilterState>({
     category: searchParams.get('category') || '',
@@ -35,6 +33,7 @@ export default function Listings() {
     condition: searchParams.get('condition') || '',
     city: searchParams.get('city') || '',
     search: searchParams.get('search') || '',
+    source: searchParams.get('source') || '',
   });
 
   // Sync filters when URL params change
@@ -48,13 +47,13 @@ export default function Listings() {
       condition: searchParams.get('condition') || '',
       city: searchParams.get('city') || '',
       search: searchParams.get('search') || '',
+      source: searchParams.get('source') || '',
     });
-    setSourceFilter(searchParams.get('source') || 'all');
   }, [searchParams.toString()]);
 
   useEffect(() => {
     fetchListings();
-  }, [filters, sortBy, sourceFilter]);
+  }, [filters, sortBy]);
 
   const fetchListings = async () => {
     setLoading(true);
@@ -62,7 +61,7 @@ export default function Listings() {
     const promises: Promise<void>[] = [];
 
     // Fetch internal listings
-    if (sourceFilter === 'all' || sourceFilter === 'golfmarket') {
+    if (!filters.source || filters.source === 'golfmarket') {
       const fetchInternal = async () => {
         let query = supabase
           .from('listings')
@@ -95,12 +94,17 @@ export default function Listings() {
     }
 
     // Fetch external listings
-    if (sourceFilter === 'all' || sourceFilter !== 'golfmarket') {
+    if (!filters.source || filters.source !== 'golfmarket') {
       const fetchExternal = async () => {
         let query = supabase
           .from('external_listings')
           .select('*')
           .eq('is_active', true);
+
+        // Filter by specific external source
+        if (filters.source && filters.source !== 'golfmarket') {
+          query = query.eq('source', filters.source);
+        }
 
         if (filters.category) query = query.eq('category', filters.category);
         if (filters.city) query = query.ilike('city', `%${filters.city}%`);
@@ -154,19 +158,8 @@ export default function Listings() {
     if (newFilters.search) params.set('search', newFilters.search);
     if (newFilters.minPrice > 0) params.set('minPrice', newFilters.minPrice.toString());
     if (newFilters.maxPrice < 100000) params.set('maxPrice', newFilters.maxPrice.toString());
-    if (sourceFilter !== 'all') params.set('source', sourceFilter);
+    if (newFilters.source) params.set('source', newFilters.source);
     
-    setSearchParams(params);
-  };
-
-  const handleSourceChange = (value: string) => {
-    setSourceFilter(value);
-    const params = new URLSearchParams(searchParams);
-    if (value === 'all') {
-      params.delete('source');
-    } else {
-      params.set('source', value);
-    }
     setSearchParams(params);
   };
 
@@ -219,40 +212,15 @@ export default function Listings() {
           {/* Filters Sidebar */}
           <aside className="space-y-6">
             <ListingFilters filters={filters} onFiltersChange={handleFiltersChange} />
-            
-            {/* Source filter */}
-            <div className="hidden lg:block space-y-2">
-              <label className="text-sm font-medium">Källa</label>
-              <Select value={sourceFilter} onValueChange={handleSourceChange}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Alla källor</SelectItem>
-                  <SelectItem value="golfmarket">GolfMarket</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
           </aside>
 
           {/* Listings Grid */}
           <div>
             {/* Sort & Results */}
             <div className="flex items-center justify-between mb-6 gap-4 flex-wrap">
-              <div className="flex items-center gap-3">
-                <p className="text-sm text-muted-foreground">
-                  {totalCount} annonser
-                </p>
-                {/* Mobile source tabs */}
-                <div className="lg:hidden">
-                  <Tabs value={sourceFilter} onValueChange={handleSourceChange}>
-                    <TabsList className="h-8">
-                      <TabsTrigger value="all" className="text-xs px-2 h-7">Alla</TabsTrigger>
-                      <TabsTrigger value="golfmarket" className="text-xs px-2 h-7">GolfMarket</TabsTrigger>
-                    </TabsList>
-                  </Tabs>
-                </div>
-              </div>
+              <p className="text-sm text-muted-foreground">
+                {totalCount} annonser
+              </p>
               <Select value={sortBy} onValueChange={setSortBy}>
                 <SelectTrigger className="w-48">
                   <SelectValue placeholder="Sortera" />
