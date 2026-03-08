@@ -939,7 +939,33 @@ function isLikelyImageUrl(url: string): boolean {
   }
 }
 
-async function resolveImageFromProductUrl(productUrl: string): Promise<string | undefined> {
+function extractSekPrice(raw: string | null | undefined): number | undefined {
+  if (!raw) return undefined
+
+  const cleaned = raw
+    .replace(/\u00a0/g, ' ')
+    .replace(/kr/gi, ' ')
+    .replace(/sek/gi, ' ')
+    .trim()
+
+  // Keep only digits, separators and spaces. Supports formats like "2 131,99" or "2,131.99"
+  const numeric = cleaned.replace(/[^0-9.,\s]/g, '')
+  if (!numeric) return undefined
+
+  // Swedish style first: 2 131,99
+  const swedish = numeric.replace(/\s+/g, '').replace(/\./g, '').replace(',', '.')
+  const swedishValue = Number(swedish)
+  if (Number.isFinite(swedishValue) && swedishValue > 0) return Math.round(swedishValue)
+
+  // Fallback: 2,131.99
+  const intl = numeric.replace(/\s+/g, '').replace(/,/g, '')
+  const intlValue = Number(intl)
+  if (Number.isFinite(intlValue) && intlValue > 0) return Math.round(intlValue)
+
+  return undefined
+}
+
+async function resolveProductMetaFromUrl(productUrl: string): Promise<{ imageUrl?: string; price?: number }> {
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), 8_000)
 
@@ -952,19 +978,30 @@ async function resolveImageFromProductUrl(productUrl: string): Promise<string | 
       },
     })
 
-    if (!response.ok) return undefined
+    if (!response.ok) return {}
     const html = await response.text()
 
     const ogMatch = html.match(/<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i)
-    if (ogMatch?.[1] && isLikelyImageUrl(ogMatch[1])) return ogMatch[1]
-
     const twitterMatch = html.match(/<meta[^>]+name=["']twitter:image["'][^>]+content=["']([^"']+)["']/i)
-    if (twitterMatch?.[1] && isLikelyImageUrl(twitterMatch[1])) return twitterMatch[1]
+    const htmlImage = extractImageUrlsFromHtml(html, productUrl).find(isLikelyImageUrl)
 
-    const htmlImages = extractImageUrlsFromHtml(html, productUrl)
-    return htmlImages.find(isLikelyImageUrl)
+    const imageUrl = [ogMatch?.[1], twitterMatch?.[1], htmlImage]
+      .find((url) => Boolean(url) && isLikelyImageUrl(url!))
+
+    // Capture common Golfbidder price patterns (including merged text from rendered markup)
+    const priceMatch =
+      html.match(/Begagnat\s*från\s*([0-9\s.,]+)\s*kr/i) ||
+      html.match(/Från\s*([0-9\s.,]+)\s*kr/i) ||
+      html.match(/([0-9][0-9\s.,]{1,20})\s*kr/i)
+
+    const price = extractSekPrice(priceMatch?.[1])
+
+    return {
+      imageUrl: imageUrl || undefined,
+      price,
+    }
   } catch {
-    return undefined
+    return {}
   } finally {
     clearTimeout(timeout)
   }
