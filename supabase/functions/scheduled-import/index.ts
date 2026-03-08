@@ -271,6 +271,14 @@ function dedupeListingsBySourceId(listings: ExternalListingInput[]): ExternalLis
   return deduped
 }
 
+function sortByPublishedDesc(listings: ExternalListingInput[]): ExternalListingInput[] {
+  return [...listings].sort((a, b) => {
+    const aTs = a.published_at ? new Date(a.published_at).getTime() : 0
+    const bTs = b.published_at ? new Date(b.published_at).getTime() : 0
+    return bTs - aTs
+  })
+}
+
 async function fetchBlocket(): Promise<ExternalListingInput[]> {
   const API_URL = 'https://www.blocket.se/recommerce/forsale/search/api/search/SEARCH_ID_BAP_COMMON'
   const TIMEOUT_MS = 15_000
