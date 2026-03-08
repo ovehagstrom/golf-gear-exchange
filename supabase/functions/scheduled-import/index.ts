@@ -1083,7 +1083,7 @@ Max 30 produkter.`,
     const result: ExternalListingInput[] = []
 
     // Sources where collection pages have lazy-loaded/placeholder images
-    const alwaysFetchProductImage = new Set(['swegolf'])
+    const alwaysFetchProductImage = new Set<string>([])
 
     for (const [index, p] of products.entries()) {
       if (!p || typeof p !== 'object' || !('title' in p) || typeof p.title !== 'string') continue
