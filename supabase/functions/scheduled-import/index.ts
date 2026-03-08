@@ -1232,12 +1232,16 @@ async function fetchGolfStores(selectedStoreSources: string[] = []): Promise<Ext
 
         console.log(`[${store.name}] Extracted ${products.length} products`)
 
-        if (products.length > bestProducts.length) {
-          bestProducts = products
+        if (SCRAPE_ALL_URLS_SOURCES.has(store.source)) {
+          // Accumulate products from all category pages
+          bestProducts.push(...products)
+        } else {
+          if (products.length > bestProducts.length) {
+            bestProducts = products
+          }
+          // enough results for this store, skip next fallback URL
+          if (bestProducts.length >= 10) break
         }
-
-        // enough results for this store, skip next fallback URL
-        if (bestProducts.length >= 10) break
       } catch (err) {
         console.error(`[${store.name}] Error scraping ${url}:`, err)
       }
