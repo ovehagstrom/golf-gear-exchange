@@ -54,6 +54,7 @@ function isKeywordFiltered(title: string, description?: string): boolean {
 
 // Track AI availability — once it fails, skip remaining calls this run
 let aiAvailable = true
+let aiProductExtractionAvailable = true
 
 async function isGolfEquipment(title: string, description?: string): Promise<boolean> {
   if (!aiAvailable) return true // AI already failed this run, accept all
