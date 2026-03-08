@@ -977,6 +977,44 @@ async function resolveImageFromProductUrl(productUrl: string): Promise<string | 
   }
 }
 
+async function validateProductUrl(url: string): Promise<boolean> {
+  try {
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), 6_000)
+    const response = await fetch(url, {
+      method: 'HEAD',
+      signal: controller.signal,
+      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; GolfMarket/1.0)' },
+      redirect: 'follow',
+    })
+    clearTimeout(timeout)
+    return response.ok
+  } catch {
+    return false
+  }
+}
+
+function stripFilterNavigation(markdown: string): string {
+  // Try to find the start of product listings by looking for common patterns
+  const patterns = [
+    /\d+-\d+ av \d+ modeller/,       // Golfbidder: "1-30 av 466 modeller"
+    /\d+ resultat\n/,                  // Swegolf: "2 resultat"
+    /Sorterat efter\n/,                // Golfbidder sort section
+    /Visar \d+/,                       // Generic "Visar X produkter"
+  ]
+
+  for (const pattern of patterns) {
+    const match = markdown.search(pattern)
+    if (match > 500) {
+      // Found product section marker, skip everything before it
+      const stripped = markdown.substring(match)
+      if (stripped.length > 200) return stripped
+    }
+  }
+
+  return markdown
+}
+
 async function extractProductsFromMarkdown(
   markdown: string,
   storeName: string,
@@ -987,7 +1025,9 @@ async function extractProductsFromMarkdown(
   const apiKey = Deno.env.get('LOVABLE_API_KEY')
   if (!apiKey) return []
 
-  const truncated = markdown.substring(0, 8000)
+  // Strip filter/navigation content to avoid truncating before products
+  const cleanedMarkdown = stripFilterNavigation(markdown)
+  const truncated = cleanedMarkdown.substring(0, 14000)
 
   try {
     const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
@@ -1007,6 +1047,9 @@ VIKTIGT:
 - Inkludera BARA riktiga produktsidor, inte kategorier, menyer eller filtreringslänkar.
 - Inkludera BARA golfklubbor (inte bollar, kläder, skor, bagar, vagnar, tillbehör).
 - Om du inte kan hitta några produkter, svara med tom array [].
+- Priser kan vara i format "2 131,99 kr" (mellanslag som tusentalsseparator, komma som decimaltecken). Konvertera till heltal i SEK (t.ex. 2132).
+- Priser kan stå ihop med annan text, t.ex. "2022Begagnat från2 131,99 kr" — extrahera priset 2132.
+- Bildlänkar kan vara i markdown-format som ![alt](url) — extrahera URL:en.
 Max 30 produkter.`,
           },
           {
@@ -1015,7 +1058,7 @@ Max 30 produkter.`,
           },
         ],
         temperature: 0.1,
-        max_tokens: 2500,
+        max_tokens: 3000,
       }),
     })
 
@@ -1036,6 +1079,9 @@ Max 30 produkter.`,
     const filteredFallbackImages = fallbackImages.filter(isLikelyImageUrl)
     const result: ExternalListingInput[] = []
 
+    // Sources where collection pages have lazy-loaded/placeholder images
+    const alwaysFetchProductImage = new Set(['swegolf'])
+
     for (const [index, p] of products.entries()) {
       if (!p || typeof p !== 'object' || !('title' in p) || typeof p.title !== 'string') continue
 
@@ -1054,16 +1100,27 @@ Max 30 produkter.`,
         continue
       }
 
+      // Validate URL doesn't 404 for stores with known broken links
+      if (resolvedProductUrl && storeSource === 'swegolf') {
+        const isValid = await validateProductUrl(resolvedProductUrl)
+        if (!isValid) {
+          console.log(`[${storeSource}] ✗ URL 404: ${resolvedProductUrl}`)
+          continue
+        }
+      }
+
       const aiImageRaw = typeof p.image_url === 'string' ? p.image_url : undefined
       const aiImageAbsolute = aiImageRaw ? toAbsoluteUrl(sourceUrl, aiImageRaw) : null
 
       let resolvedImage: string | undefined
-      if (aiImageAbsolute && isLikelyImageUrl(aiImageAbsolute)) {
+      if (aiImageAbsolute && isLikelyImageUrl(aiImageAbsolute) && !aiImageAbsolute.includes('data:image')) {
         resolvedImage = aiImageAbsolute
       }
 
-      if (!resolvedImage && resolvedProductUrl) {
-        resolvedImage = await resolveImageFromProductUrl(resolvedProductUrl)
+      // For stores with lazy-loaded images, always try to get og:image from product page
+      if ((!resolvedImage || alwaysFetchProductImage.has(storeSource)) && resolvedProductUrl) {
+        const productImage = await resolveImageFromProductUrl(resolvedProductUrl)
+        if (productImage) resolvedImage = productImage
       }
 
       const fallbackImage = filteredFallbackImages[index] || filteredFallbackImages[0]
@@ -1083,7 +1140,7 @@ Max 30 produkter.`,
       })
     }
 
-    const markdownParsed = extractProductsFromMarkdownLinks(markdown, storeSource, sourceUrl, filteredFallbackImages)
+    const markdownParsed = extractProductsFromMarkdownLinks(cleanedMarkdown, storeSource, sourceUrl, filteredFallbackImages)
     const mergedByUrl = new Map<string, ExternalListingInput>()
 
     for (const item of [...result, ...markdownParsed]) {
