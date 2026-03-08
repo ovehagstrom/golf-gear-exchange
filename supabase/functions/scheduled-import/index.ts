@@ -1173,6 +1173,11 @@ Max 30 produkter.`
         if (!resolvedPrice && meta.price) resolvedPrice = meta.price
       }
 
+      // Golfbidder: require valid product price to avoid importing policy/info pages
+      if (storeSource === 'golfbidder' && !resolvedPrice) {
+        continue
+      }
+
       const fallbackImage = filteredFallbackImages[index] || filteredFallbackImages[0]
       const chosenImage = resolvedImage || fallbackImage
 
@@ -1180,7 +1185,7 @@ Max 30 produkter.`
         source: storeSource,
         source_id: `${storeSource}-${title.toLowerCase().replace(/[^a-z0-9åäö]/g, '-').substring(0, 60)}`,
         title,
-        price: typeof p.price === 'number' ? Math.round(p.price) : undefined,
+        price: resolvedPrice,
         city: undefined,
         source_url: resolvedProductUrl || sourceUrl,
         image_urls: chosenImage ? [chosenImage] : [],
