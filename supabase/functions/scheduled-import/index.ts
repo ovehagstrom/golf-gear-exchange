@@ -489,18 +489,354 @@ async function fetchTradera(): Promise<ExternalListingInput[]> {
   return deduped
 }
 
-async function fetchFacebook(): Promise<ExternalListingInput[]> {
-  // Facebook Marketplace has no public API and blocks scraping.
-  // This fetcher is a placeholder for when we integrate a proxy/data provider.
-  console.log('[Facebook] No public API available — skipping (requires data provider integration)')
-  return []
+// ============================================================
+// Swedish Golf Store Scraping via Firecrawl
+// ============================================================
+
+interface StoreConfig {
+  name: string
+  source: string
+  urls: string[]
 }
 
+const GOLF_STORES: StoreConfig[] = [
+  {
+    name: 'Dormy Golf',
+    source: 'dormy',
+    urls: [
+      'https://www.dormy.com/sv/golfklubbor/metalwoods/drivers',
+      'https://www.dormy.com/sv/golfklubbor/metalwoods/fairwaywoods',
+      'https://www.dormy.com/sv/golfklubbor/metalwoods/hybrider',
+      'https://www.dormy.com/sv/golfklubbor/jarnset',
+      'https://www.dormy.com/sv/golfklubbor/wedgar',
+      'https://www.dormy.com/sv/golfklubbor/putters',
+    ],
+  },
+  {
+    name: 'Golfstore',
+    source: 'golfstore',
+    urls: [
+      'https://www.golfstore.se/produkter/herr/herrklubbor',
+      'https://www.golfstore.se/produkter/dam/damklubbor',
+    ],
+  },
+  {
+    name: 'ScandiGolf',
+    source: 'scandigolf',
+    urls: [
+      'https://www.scandigolf.se/collections/driver',
+      'https://www.scandigolf.se/collections/fairwaywoods',
+      'https://www.scandigolf.se/collections/hybrider',
+      'https://www.scandigolf.se/collections/jarnset',
+      'https://www.scandigolf.se/collections/wedgar',
+      'https://www.scandigolf.se/collections/putters',
+    ],
+  },
+  {
+    name: 'Swegolf',
+    source: 'swegolf',
+    urls: [
+      'https://www.swegolf.se/collections/golfklubbor',
+    ],
+  },
+  {
+    name: 'Dimbo Golf',
+    source: 'dimbogolf',
+    urls: [
+      'https://www.dimbogolf.se/golfklubbor',
+    ],
+  },
+  {
+    name: 'Downswing',
+    source: 'downswing',
+    urls: [
+      'https://www.downswing.se/golfklubbor',
+    ],
+  },
+  {
+    name: 'Golfbutik',
+    source: 'golfbutik',
+    urls: [
+      'https://golfbutik.se/24-drivers',
+      'https://golfbutik.se/25-fairwaywoods',
+      'https://golfbutik.se/26-hybrider',
+      'https://golfbutik.se/27-jarnset',
+      'https://golfbutik.se/28-wedgar',
+      'https://golfbutik.se/29-putters',
+    ],
+  },
+  {
+    name: 'Golfprylar',
+    source: 'golfprylar',
+    urls: [
+      'https://www.golfprylar.se/golfklubbor',
+    ],
+  },
+  {
+    name: 'FJ Sweden',
+    source: 'fjsweden',
+    urls: [
+      'https://www.fjsweden.se/golfklubbor',
+    ],
+  },
+  {
+    name: 'NJ Golf',
+    source: 'njgolf',
+    urls: [
+      'https://www.njgolf.se/golfklubbor',
+    ],
+  },
+  {
+    name: 'Golfhandeln',
+    source: 'golfhandeln',
+    urls: [
+      'https://www.golfhandeln.se/golfklubbor',
+    ],
+  },
+  {
+    name: 'Golfgiganten',
+    source: 'golfgiganten',
+    urls: [
+      'https://www.golfgiganten.se/golfklubbor',
+    ],
+  },
+  {
+    name: 'Golfvaruhuset',
+    source: 'golfvaruhuset',
+    urls: [
+      'https://www.golfvaruhuset.se/golfklubbor',
+    ],
+  },
+  {
+    name: 'NordicGolfers',
+    source: 'nordicgolfers',
+    urls: [
+      'https://www.nordicgolfers.se/golfklubbor',
+    ],
+  },
+  {
+    name: 'Golfimporten',
+    source: 'golfimporten',
+    urls: [
+      'https://www.golfimporten.se/golfklubbor',
+    ],
+  },
+  {
+    name: 'Golfcenter',
+    source: 'golfcenter',
+    urls: [
+      'https://www.golfcenter.se/golfklubbor',
+    ],
+  },
+  {
+    name: 'Golfshopen',
+    source: 'golfshopen',
+    urls: [
+      'https://www.golfshopen.se/golfklubbor',
+    ],
+  },
+  {
+    name: 'Golfdeal',
+    source: 'golfdeal',
+    urls: [
+      'https://www.golfdeal.se/golfklubbor',
+    ],
+  },
+  {
+    name: 'Golfbidder',
+    source: 'golfbidder',
+    urls: [
+      'https://www.golfbidder.se/',
+    ],
+  },
+  {
+    name: 'Golfreuse',
+    source: 'golfreuse',
+    urls: [
+      'https://www.golfreuse.se/golfklubbor',
+    ],
+  },
+  {
+    name: 'Drivers.se',
+    source: 'drivers_se',
+    urls: [
+      'https://www.drivers.se/',
+    ],
+  },
+  {
+    name: 'Out-of-Bounds',
+    source: 'outofbounds',
+    urls: [
+      'https://www.outofbounds.se/golfklubbor',
+    ],
+  },
+  {
+    name: 'Dormy Outlet',
+    source: 'dormy_outlet',
+    urls: [
+      'https://www.dormy.com/sv/golfklubbor?f-tag=outlet',
+    ],
+  },
+]
+
+async function scrapeWithFirecrawl(url: string): Promise<string | null> {
+  const apiKey = Deno.env.get('FIRECRAWL_API_KEY')
+  if (!apiKey) {
+    console.warn('[Firecrawl] FIRECRAWL_API_KEY not set')
+    return null
+  }
+
+  try {
+    const response = await fetch('https://api.firecrawl.dev/v1/scrape', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        url,
+        formats: ['markdown'],
+        onlyMainContent: true,
+        waitFor: 5000,
+      }),
+    })
+
+    if (!response.ok) {
+      const errText = await response.text().catch(() => '')
+      console.error(`[Firecrawl] Error ${response.status} for ${url}: ${errText.substring(0, 200)}`)
+      return null
+    }
+
+    const data = await response.json()
+    return data?.data?.markdown || data?.markdown || null
+  } catch (err) {
+    console.error(`[Firecrawl] Scrape error for ${url}:`, err)
+    return null
+  }
+}
+
+async function extractProductsFromMarkdown(
+  markdown: string,
+  storeName: string,
+  sourceUrl: string
+): Promise<ExternalListingInput[]> {
+  const apiKey = Deno.env.get('LOVABLE_API_KEY')
+  if (!apiKey) return []
+
+  // Truncate to avoid token limits
+  const truncated = markdown.substring(0, 8000)
+
+  try {
+    const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'google/gemini-2.5-flash',
+        messages: [
+          {
+            role: 'system',
+            content: `Du extraherar golfprodukter från webbsidors innehåll. Svara BARA med en JSON-array med produkter.
+Varje produkt ska ha: title (string), price (number i SEK, utan "kr"), brand (string), category (driver/fairway_wood/hybrid/iron_set/wedge/putter/shaft/complete_set/bag/accessories/other).
+Om priset har "original price" och "discounted price", använd discounted price.
+Inkludera BARA golfklubbor (inte bollar, kläder, skor, bagar, vagnar, tillbehör).
+Om du inte kan hitta några produkter, svara med tom array [].
+Max 50 produkter.`,
+          },
+          {
+            role: 'user',
+            content: `Extrahera golfklubbor från denna ${storeName} sida:\n\n${truncated}`,
+          },
+        ],
+        temperature: 0.1,
+        max_tokens: 4000,
+      }),
+    })
+
+    if (!response.ok) {
+      console.error(`[AI] Product extraction failed: ${response.status}`)
+      return []
+    }
+
+    const data = await response.json()
+    const content = data.choices?.[0]?.message?.content?.trim() || '[]'
+    const jsonMatch = content.match(/\[[\s\S]*\]/)
+    if (!jsonMatch) return []
+
+    const products = JSON.parse(jsonMatch[0])
+    if (!Array.isArray(products)) return []
+
+    return products
+      .filter((p: Record<string, unknown>) => p.title && typeof p.title === 'string')
+      .map((p: Record<string, unknown>) => ({
+        source: storeName.toLowerCase().replace(/[^a-z0-9]/g, '_'),
+        source_id: `${storeName.toLowerCase().replace(/[^a-z0-9]/g, '_')}-${(p.title as string).toLowerCase().replace(/[^a-z0-9åäö]/g, '-').substring(0, 60)}`,
+        title: p.title as string,
+        price: typeof p.price === 'number' ? Math.round(p.price) : undefined,
+        city: undefined,
+        source_url: sourceUrl,
+        image_urls: [],
+        description: undefined,
+        published_at: new Date().toISOString(),
+        category: (p.category as string) || undefined,
+      }))
+  } catch (err) {
+    console.error(`[AI] Product extraction error:`, err)
+    return []
+  }
+}
+
+async function fetchGolfStores(): Promise<ExternalListingInput[]> {
+  const firecrawlKey = Deno.env.get('FIRECRAWL_API_KEY')
+  if (!firecrawlKey) {
+    console.log('[Stores] FIRECRAWL_API_KEY not set — skipping store scraping')
+    return []
+  }
+
+  const allResults: ExternalListingInput[] = []
+
+  for (const store of GOLF_STORES) {
+    console.log(`[${store.name}] Scraping ${store.urls.length} URLs...`)
+
+    for (const url of store.urls) {
+      try {
+        const markdown = await scrapeWithFirecrawl(url)
+        if (!markdown || markdown.length < 100) {
+          console.warn(`[${store.name}] No content from ${url}`)
+          continue
+        }
+
+        console.log(`[${store.name}] Got ${markdown.length} chars from ${url}`)
+        const products = await extractProductsFromMarkdown(markdown, store.name, url)
+
+        // Override source with store config source
+        for (const p of products) {
+          p.source = store.source
+          p.source_id = `${store.source}-${p.source_id}`
+        }
+
+        allResults.push(...products)
+        console.log(`[${store.name}] Extracted ${products.length} products from ${url}`)
+      } catch (err) {
+        console.error(`[${store.name}] Error scraping ${url}:`, err)
+      }
+
+      // Rate limit: 1s between requests
+      await new Promise(r => setTimeout(r, 1000))
+    }
+  }
+
+  const deduped = dedupeListingsBySourceId(allResults)
+  console.log(`[Stores] Total: ${allResults.length} raw, ${deduped.length} unique from ${GOLF_STORES.length} stores`)
+  return deduped
+}
 
 const SOURCE_FETCHERS: Record<string, () => Promise<ExternalListingInput[]>> = {
   blocket: fetchBlocket,
   tradera: fetchTradera,
-  facebook: fetchFacebook,
+  stores: fetchGolfStores,
 }
 
 // ============================================================
