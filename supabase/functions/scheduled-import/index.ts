@@ -1195,11 +1195,14 @@ Max 30 produkter.`
       })
     }
 
-    const markdownParsed = extractProductsFromMarkdownLinks(cleanedMarkdown, storeSource, sourceUrl, filteredFallbackImages)
+    const markdownParsed = storeSource === 'golfbidder'
+      ? []
+      : extractProductsFromMarkdownLinks(cleanedMarkdown, storeSource, sourceUrl, filteredFallbackImages)
     const mergedByUrl = new Map<string, ExternalListingInput>()
 
     for (const item of [...result, ...markdownParsed]) {
       if (!item.source_url || (strictSource && !isLikelyProductUrl(item.source_url, storeSource))) continue
+      if (storeSource === 'golfbidder' && !item.price) continue
 
       const existing = mergedByUrl.get(item.source_url)
       if (!existing) {
@@ -1218,7 +1221,9 @@ Max 30 produkter.`
       }
     }
 
-    return Array.from(mergedByUrl.values()).filter((item) => item.title && !isCategoryLikeTitle(item.title)).slice(0, 30)
+    return Array.from(mergedByUrl.values())
+      .filter((item) => item.title && !isCategoryLikeTitle(item.title) && (storeSource !== 'golfbidder' || Boolean(item.price)))
+      .slice(0, 30)
   } catch (err) {
     console.error('[AI] Product extraction error:', err)
     return []
