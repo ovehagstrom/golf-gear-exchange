@@ -745,7 +745,7 @@ async function scrapeWithFirecrawl(url: string): Promise<ScrapeResult | null> {
       body: JSON.stringify({
         url,
         formats: ['markdown', 'html'],
-        onlyMainContent: true,
+        onlyMainContent: false,
         waitFor: 5000,
       }),
     })
@@ -794,6 +794,51 @@ function extractImageUrlsFromMarkdown(markdown: string): string[] {
   }
 
   return Array.from(urls).slice(0, 4)
+}
+
+function isLikelyImageUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url)
+    const pathname = parsed.pathname.toLowerCase()
+    const hostname = parsed.hostname.toLowerCase()
+
+    if (/\.(jpg|jpeg|png|webp|avif|gif|svg)$/.test(pathname)) return true
+    if (hostname.includes('cdn.shopify.com') && pathname.includes('/files/')) return true
+    return false
+  } catch {
+    return false
+  }
+}
+
+async function resolveImageFromProductUrl(productUrl: string): Promise<string | undefined> {
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), 8_000)
+
+  try {
+    const response = await fetch(productUrl, {
+      signal: controller.signal,
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (compatible; GolfMarket/1.0)',
+        'Accept': 'text/html,application/xhtml+xml',
+      },
+    })
+
+    if (!response.ok) return undefined
+    const html = await response.text()
+
+    const ogMatch = html.match(/<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i)
+    if (ogMatch?.[1] && isLikelyImageUrl(ogMatch[1])) return ogMatch[1]
+
+    const twitterMatch = html.match(/<meta[^>]+name=["']twitter:image["'][^>]+content=["']([^"']+)["']/i)
+    if (twitterMatch?.[1] && isLikelyImageUrl(twitterMatch[1])) return twitterMatch[1]
+
+    const htmlImages = extractImageUrlsFromHtml(html, productUrl)
+    return htmlImages.find(isLikelyImageUrl)
+  } catch {
+    return undefined
+  } finally {
+    clearTimeout(timeout)
+  }
 }
 
 async function extractProductsFromMarkdown(
@@ -848,40 +893,56 @@ Max 30 produkter.`,
     const products = JSON.parse(jsonMatch[0])
     if (!Array.isArray(products)) return []
 
-    return products
-      .filter((p: Record<string, unknown>) => p.title && typeof p.title === 'string')
-      .map((p: Record<string, unknown>, index: number) => {
-        const aiImage = typeof p.image_url === 'string' ? p.image_url : undefined
-        const fallbackImage = fallbackImages[index % Math.max(1, fallbackImages.length)]
-        const chosenImage = aiImage || fallbackImage
+    const result: ExternalListingInput[] = []
 
-        return {
-          source: storeName.toLowerCase().replace(/[^a-z0-9]/g, '_'),
-          source_id: `${storeName.toLowerCase().replace(/[^a-z0-9]/g, '_')}-${(p.title as string).toLowerCase().replace(/[^a-z0-9åäö]/g, '-').substring(0, 60)}`,
-          title: p.title as string,
-          price: typeof p.price === 'number' ? Math.round(p.price) : undefined,
-          city: undefined,
-          source_url: sourceUrl,
-          image_urls: chosenImage ? [chosenImage] : [],
-          description: undefined,
-          published_at: new Date().toISOString(),
-          category: (p.category as string) || undefined,
-        }
+    for (const [index, p] of products.entries()) {
+      if (!p || typeof p !== 'object' || !('title' in p) || typeof p.title !== 'string') continue
+
+      const aiImageRaw = typeof p.image_url === 'string' ? p.image_url : undefined
+      let resolvedImage: string | undefined
+
+      if (aiImageRaw && isLikelyImageUrl(aiImageRaw)) {
+        resolvedImage = aiImageRaw
+      } else if (aiImageRaw && aiImageRaw.includes('/products/')) {
+        resolvedImage = await resolveImageFromProductUrl(aiImageRaw)
+      }
+
+      const fallbackImage = fallbackImages.find(isLikelyImageUrl) || fallbackImages[index]
+      const chosenImage = resolvedImage || fallbackImage
+
+      result.push({
+        source: storeName.toLowerCase().replace(/[^a-z0-9]/g, '_'),
+        source_id: `${storeName.toLowerCase().replace(/[^a-z0-9]/g, '_')}-${(p.title as string).toLowerCase().replace(/[^a-z0-9åäö]/g, '-').substring(0, 60)}`,
+        title: p.title as string,
+        price: typeof p.price === 'number' ? Math.round(p.price) : undefined,
+        city: undefined,
+        source_url: sourceUrl,
+        image_urls: chosenImage ? [chosenImage] : [],
+        description: undefined,
+        published_at: new Date().toISOString(),
+        category: (p.category as string) || undefined,
       })
+    }
+
+    return result
   } catch (err) {
     console.error('[AI] Product extraction error:', err)
     return []
   }
 }
 
-async function fetchGolfStores(): Promise<ExternalListingInput[]> {
+async function fetchGolfStores(selectedStoreSources: string[] = []): Promise<ExternalListingInput[]> {
   const firecrawlKey = Deno.env.get('FIRECRAWL_API_KEY')
   if (!firecrawlKey) {
     console.log('[Stores] FIRECRAWL_API_KEY not set — skipping store scraping')
     return []
   }
 
-  // Scrape ALL stores every run. Use up to 2 fallback URLs per store.
+  const storesToRun = selectedStoreSources.length > 0
+    ? GOLF_STORES.filter((store) => selectedStoreSources.includes(store.source))
+    : GOLF_STORES
+
+  // Scrape selected stores every run. Use up to 2 fallback URLs per store.
   const hour = new Date().getUTCHours()
   const concurrency = 4
 
@@ -933,14 +994,14 @@ async function fetchGolfStores(): Promise<ExternalListingInput[]> {
 
   const allResults: ExternalListingInput[] = []
 
-  for (let i = 0; i < GOLF_STORES.length; i += concurrency) {
-    const chunk = GOLF_STORES.slice(i, i + concurrency)
+  for (let i = 0; i < storesToRun.length; i += concurrency) {
+    const chunk = storesToRun.slice(i, i + concurrency)
     const chunkResults = await Promise.all(chunk.map(processStore))
     allResults.push(...chunkResults.flat())
   }
 
   const deduped = dedupeListingsBySourceId(allResults)
-  console.log(`[Stores] Total: ${allResults.length} raw, ${deduped.length} unique from ${GOLF_STORES.length} stores`)
+  console.log(`[Stores] Total: ${allResults.length} raw, ${deduped.length} unique from ${storesToRun.length} stores`)
   return deduped
 }
 
@@ -1019,6 +1080,7 @@ Deno.serve(async (req) => {
   let isManual = false
   let forceInline = false
   let maxListingsPerSource = 120
+  let storeSources: string[] = []
 
   try {
     const body = await req.json().catch(() => ({}))
@@ -1038,6 +1100,9 @@ Deno.serve(async (req) => {
     }
     if (body.mode === 'inline') {
       forceInline = true
+    }
+    if (Array.isArray(body.storeSources)) {
+      storeSources = body.storeSources.filter((s: unknown): s is string => typeof s === 'string')
     }
   } catch {
     // No body — run all sources
@@ -1064,7 +1129,9 @@ Deno.serve(async (req) => {
 
       try {
         console.log(`[${source}] Starting fetch...`)
-        const fetchedListings = await fetcher()
+        const fetchedListings = source === 'stores'
+          ? await fetchGolfStores(storeSources)
+          : await fetcher()
         const listings = sortByPublishedDesc(fetchedListings).slice(0, maxListingsPerSource)
         console.log(`[${source}] Processing ${listings.length}/${fetchedListings.length} listings`)
 
