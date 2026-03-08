@@ -800,7 +800,7 @@ async function fetchGolfStores(): Promise<ExternalListingInput[]> {
   // Process max 5 stores per run to avoid timeout
   // Rotate which stores get scraped based on current hour
   const hour = new Date().getUTCHours()
-  const batchSize = 5
+  const batchSize = 3
   const startIdx = (hour % Math.ceil(GOLF_STORES.length / batchSize)) * batchSize
   const storeBatch = GOLF_STORES.slice(startIdx, startIdx + batchSize)
   console.log(`[Stores] Processing batch ${startIdx}-${startIdx + storeBatch.length} of ${GOLF_STORES.length} stores`)
