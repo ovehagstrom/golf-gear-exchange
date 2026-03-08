@@ -544,7 +544,7 @@ const GOLF_STORES: StoreConfig[] = [
   },
   {
     name: 'Dimbo Golf',
-    source: 'dimbogolf',
+    source: 'dimbo-golf',
     urls: [
       'https://www.dimbogolf.se/golfklubbor',
     ],
@@ -680,6 +680,14 @@ interface ScrapeResult {
   imageCandidates: string[]
 }
 
+const CATEGORY_ONLY_TITLES = new Set([
+  'drivers', 'driver', 'fairwaywoods', 'fairwaywood', 'hybrider', 'hybrid', 'jarnset', 'järnset',
+  'wedgar', 'wedge', 'putters', 'putter', 'golfpaket', 'custom-set', 'custom set', 'barnklubbor',
+  'enstaka järn', 'lösa juniorklubbor', 'juniorklubbpaket', 'skaft', 'helset', 'klubbor', 'golfklubbor',
+])
+
+const STRICT_PRODUCT_URL_SOURCES = new Set(['scandigolf', 'swegolf', 'golfbutik', 'dimbogolf', 'dimbo-golf'])
+
 function toAbsoluteUrl(baseUrl: string, maybeRelative: string): string | null {
   try {
     return new URL(maybeRelative, baseUrl).toString()
@@ -688,34 +696,137 @@ function toAbsoluteUrl(baseUrl: string, maybeRelative: string): string | null {
   }
 }
 
+function normalizeText(input: string): string {
+  return input
+    .toLowerCase()
+    .replace(/[|]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+function isCategoryLikeTitle(title: string): boolean {
+  const normalized = normalizeText(title)
+  if (!normalized) return true
+  if (CATEGORY_ONLY_TITLES.has(normalized)) return true
+
+  const words = normalized.split(' ').filter(Boolean)
+  if (words.length <= 3 && !/\d/.test(normalized) && !/[a-zåäö]{3,}\s+[a-zåäö]{3,}/i.test(title)) {
+    return ['driver', 'drivers', 'jarnset', 'järnset', 'putter', 'putters', 'wedge', 'wedgar', 'hybrid', 'hybrider', 'skaft', 'helset'].some((token) => normalized.includes(token))
+  }
+
+  return false
+}
+
+function hasBlockedImageTokens(url: string): boolean {
+  const value = url.toLowerCase()
+  return ['logo', 'favicon', 'sprite', 'icon', 'placeholder', 'banner'].some((token) => value.includes(token))
+}
+
+function isLikelyProductUrl(url: string, storeSource: string): boolean {
+  const value = url.toLowerCase()
+
+  if (storeSource === 'scandigolf' || storeSource === 'swegolf') {
+    return value.includes('/products/')
+  }
+
+  if (storeSource === 'golfbutik') {
+    if (!value.includes('golfbutik.se/')) return false
+    if (value.includes('/24-') || value.includes('/25-') || value.includes('/26-') || value.includes('/27-') || value.includes('/28-') || value.includes('/29-')) return false
+    return value.includes('.html') || value.includes('/drivers/') || value.includes('/jarnset/') || value.includes('/wedgar/') || value.includes('/putters/')
+  }
+
+  if (storeSource === 'dimbo-golf' || storeSource === 'dimbogolf') {
+    return value.includes('/products/') || value.includes('/produkt/') || value.includes('/shop/')
+  }
+
+  return value.includes('/products/') || value.includes('/produkt/')
+}
+
+function titleFromProductUrl(productUrl: string): string {
+  try {
+    const parsed = new URL(productUrl)
+    const path = parsed.pathname
+
+    let slug = path.split('/').filter(Boolean).pop() || ''
+    slug = slug
+      .replace(/\.html.*$/i, '')
+      .replace(/^[0-9]+-/, '')
+      .replace(/\?.*$/, '')
+      .replace(/#.*/, '')
+      .replace(/-/g, ' ')
+      .trim()
+
+    if (!slug) return ''
+    return slug
+      .split(' ')
+      .filter(Boolean)
+      .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+      .join(' ')
+  } catch {
+    return ''
+  }
+}
+
+function extractProductsFromMarkdownLinks(
+  markdown: string,
+  storeSource: string,
+  sourceUrl: string,
+  fallbackImages: string[]
+): ExternalListingInput[] {
+  const productsByUrl = new Map<string, ExternalListingInput>()
+  const safeFallbackImage = fallbackImages.find(isLikelyImageUrl)
+  const urlRegex = /(https?:\/\/[^\s)"'\\]+|\/[a-z0-9][^\s)"'\\]*)/gi
+
+  let match: RegExpExecArray | null
+  while ((match = urlRegex.exec(markdown)) !== null) {
+    const rawUrl = match[1]
+    const absolute = toAbsoluteUrl(sourceUrl, rawUrl)
+    if (!absolute || !isLikelyProductUrl(absolute, storeSource)) continue
+
+    if (!productsByUrl.has(absolute)) {
+      const title = titleFromProductUrl(absolute)
+      if (!title || isCategoryLikeTitle(title)) continue
+
+      productsByUrl.set(absolute, {
+        source: storeSource,
+        source_id: `${storeSource}-${title.toLowerCase().replace(/[^a-z0-9åäö]/g, '-').substring(0, 60)}`,
+        title,
+        source_url: absolute,
+        image_urls: safeFallbackImage ? [safeFallbackImage] : [],
+        published_at: new Date().toISOString(),
+      })
+    }
+  }
+
+  return Array.from(productsByUrl.values()).slice(0, 30)
+}
+
 function extractImageUrlsFromHtml(html: string, baseUrl: string): string[] {
   const urls = new Set<string>()
 
-  // Match src, data-src, data-lazy-src, srcset attributes
   const attrRegex = /<img[^>]+(?:src|data-src|data-lazy-src|data-original)=["']([^"']+)["']/gi
   let match: RegExpExecArray | null
 
   while ((match = attrRegex.exec(html)) !== null) {
     const raw = match[1]
-    if (!raw || raw.startsWith('data:') || raw.includes('placeholder') || raw.includes('1x1')) continue
+    if (!raw || raw.startsWith('data:') || hasBlockedImageTokens(raw) || raw.includes('1x1')) continue
     const absolute = toAbsoluteUrl(baseUrl, raw)
     if (!absolute) continue
 
-    if (/\.(jpg|jpeg|png|webp|avif)(\?|$)/i.test(absolute) || absolute.includes('/images/') || absolute.includes('/image/') || absolute.includes('/cdn/') || absolute.includes('shopify') || absolute.includes('cloudinary')) {
+    if (isLikelyImageUrl(absolute)) {
       urls.add(absolute)
     }
   }
 
-  // Also extract from srcset
   const srcsetRegex = /srcset=["']([^"']+)["']/gi
   while ((match = srcsetRegex.exec(html)) !== null) {
     const srcset = match[1]
     const entries = srcset.split(',')
     for (const entry of entries) {
       const imgUrl = entry.trim().split(/\s+/)[0]
-      if (!imgUrl || imgUrl.startsWith('data:')) continue
+      if (!imgUrl || imgUrl.startsWith('data:') || hasBlockedImageTokens(imgUrl)) continue
       const absolute = toAbsoluteUrl(baseUrl, imgUrl)
-      if (absolute && /\.(jpg|jpeg|png|webp|avif)(\?|$)/i.test(absolute)) {
+      if (absolute && isLikelyImageUrl(absolute)) {
         urls.add(absolute)
       }
     }
@@ -798,12 +909,15 @@ function extractImageUrlsFromMarkdown(markdown: string): string[] {
 
 function isLikelyImageUrl(url: string): boolean {
   try {
+    if (hasBlockedImageTokens(url)) return false
+
     const parsed = new URL(url)
     const pathname = parsed.pathname.toLowerCase()
     const hostname = parsed.hostname.toLowerCase()
 
-    if (/\.(jpg|jpeg|png|webp|avif|gif|svg)$/.test(pathname)) return true
-    if (hostname.includes('cdn.shopify.com') && pathname.includes('/files/')) return true
+    if (/\.(jpg|jpeg|png|webp|avif|gif)$/.test(pathname)) return true
+    if (hostname.includes('cdn.shopify.com') && (pathname.includes('/products/') || pathname.includes('/files/'))) return true
+    if (pathname.includes('/products/') && (pathname.includes('/cdn/') || pathname.includes('/media/'))) return true
     return false
   } catch {
     return false
@@ -844,6 +958,7 @@ async function resolveImageFromProductUrl(productUrl: string): Promise<string | 
 async function extractProductsFromMarkdown(
   markdown: string,
   storeName: string,
+  storeSource: string,
   sourceUrl: string,
   fallbackImages: string[]
 ): Promise<ExternalListingInput[]> {
@@ -865,9 +980,11 @@ async function extractProductsFromMarkdown(
           {
             role: 'system',
             content: `Du extraherar golfprodukter från webbsidors innehåll. Svara BARA med en JSON-array med produkter.
-Varje produkt ska ha: title (string), price (number i SEK, utan "kr"), brand (string), category (driver/fairway_wood/hybrid/iron_set/wedge/putter/shaft/complete_set/bag/accessories/other), image_url (string, absolut URL om tillgänglig).
-Inkludera BARA golfklubbor (inte bollar, kläder, skor, bagar, vagnar, tillbehör).
-Om du inte kan hitta några produkter, svara med tom array [].
+Varje produkt ska ha: title (string), price (number i SEK, utan "kr"), brand (string), category (driver/fairway_wood/hybrid/iron_set/wedge/putter/shaft/complete_set/bag/accessories/other), product_url (string, absolut eller relativ URL till PRODUKT), image_url (string, absolut URL om tillgänglig).
+VIKTIGT:
+- Inkludera BARA riktiga produktsidor, inte kategorier, menyer eller filtreringslänkar.
+- Inkludera BARA golfklubbor (inte bollar, kläder, skor, bagar, vagnar, tillbehör).
+- Om du inte kan hitta några produkter, svara med tom array [].
 Max 30 produkter.`,
           },
           {
@@ -893,30 +1010,45 @@ Max 30 produkter.`,
     const products = JSON.parse(jsonMatch[0])
     if (!Array.isArray(products)) return []
 
+    const strictSource = STRICT_PRODUCT_URL_SOURCES.has(storeSource)
+    const filteredFallbackImages = fallbackImages.filter(isLikelyImageUrl)
     const result: ExternalListingInput[] = []
 
     for (const [index, p] of products.entries()) {
       if (!p || typeof p !== 'object' || !('title' in p) || typeof p.title !== 'string') continue
 
-      const aiImageRaw = typeof p.image_url === 'string' ? p.image_url : undefined
-      let resolvedImage: string | undefined
+      const title = (p.title as string).trim()
+      if (!title || isCategoryLikeTitle(title)) continue
 
-      if (aiImageRaw && isLikelyImageUrl(aiImageRaw)) {
-        resolvedImage = aiImageRaw
-      } else if (aiImageRaw && aiImageRaw.includes('/products/')) {
-        resolvedImage = await resolveImageFromProductUrl(aiImageRaw)
+      const rawProductUrl = typeof p.product_url === 'string' ? p.product_url : undefined
+      const resolvedProductUrl = rawProductUrl ? toAbsoluteUrl(sourceUrl, rawProductUrl) : null
+
+      if (strictSource && (!resolvedProductUrl || !isLikelyProductUrl(resolvedProductUrl, storeSource))) {
+        continue
       }
 
-      const fallbackImage = fallbackImages.find(isLikelyImageUrl) || fallbackImages[index]
+      const aiImageRaw = typeof p.image_url === 'string' ? p.image_url : undefined
+      const aiImageAbsolute = aiImageRaw ? toAbsoluteUrl(sourceUrl, aiImageRaw) : null
+
+      let resolvedImage: string | undefined
+      if (aiImageAbsolute && isLikelyImageUrl(aiImageAbsolute)) {
+        resolvedImage = aiImageAbsolute
+      }
+
+      if (!resolvedImage && resolvedProductUrl) {
+        resolvedImage = await resolveImageFromProductUrl(resolvedProductUrl)
+      }
+
+      const fallbackImage = filteredFallbackImages[index] || filteredFallbackImages[0]
       const chosenImage = resolvedImage || fallbackImage
 
       result.push({
-        source: storeName.toLowerCase().replace(/[^a-z0-9]/g, '_'),
-        source_id: `${storeName.toLowerCase().replace(/[^a-z0-9]/g, '_')}-${(p.title as string).toLowerCase().replace(/[^a-z0-9åäö]/g, '-').substring(0, 60)}`,
-        title: p.title as string,
+        source: storeSource,
+        source_id: `${storeSource}-${title.toLowerCase().replace(/[^a-z0-9åäö]/g, '-').substring(0, 60)}`,
+        title,
         price: typeof p.price === 'number' ? Math.round(p.price) : undefined,
         city: undefined,
-        source_url: sourceUrl,
+        source_url: resolvedProductUrl || sourceUrl,
         image_urls: chosenImage ? [chosenImage] : [],
         description: undefined,
         published_at: new Date().toISOString(),
@@ -924,7 +1056,30 @@ Max 30 produkter.`,
       })
     }
 
-    return result
+    const markdownParsed = extractProductsFromMarkdownLinks(markdown, storeSource, sourceUrl, filteredFallbackImages)
+    const mergedByUrl = new Map<string, ExternalListingInput>()
+
+    for (const item of [...result, ...markdownParsed]) {
+      if (!item.source_url || (strictSource && !isLikelyProductUrl(item.source_url, storeSource))) continue
+
+      const existing = mergedByUrl.get(item.source_url)
+      if (!existing) {
+        mergedByUrl.set(item.source_url, item)
+        continue
+      }
+
+      if ((!existing.image_urls || existing.image_urls.length === 0) && item.image_urls && item.image_urls.length > 0) {
+        existing.image_urls = item.image_urls
+      }
+      if ((!existing.title || existing.title.length < 8) && item.title) {
+        existing.title = item.title
+      }
+      if (!existing.price && item.price) {
+        existing.price = item.price
+      }
+    }
+
+    return Array.from(mergedByUrl.values()).filter((item) => item.title && !isCategoryLikeTitle(item.title)).slice(0, 30)
   } catch (err) {
     console.error('[AI] Product extraction error:', err)
     return []
@@ -969,12 +1124,13 @@ async function fetchGolfStores(selectedStoreSources: string[] = []): Promise<Ext
 
         const markdownImages = extractImageUrlsFromMarkdown(scrapeResult.markdown)
         const fallbackImages = Array.from(new Set([...scrapeResult.imageCandidates, ...markdownImages])).slice(0, 8)
-        const products = await extractProductsFromMarkdown(scrapeResult.markdown, store.name, url, fallbackImages)
-
-        for (const p of products) {
-          p.source = store.source
-          p.source_id = `${store.source}-${p.source_id}`
-        }
+        const products = await extractProductsFromMarkdown(
+          scrapeResult.markdown,
+          store.name,
+          store.source,
+          url,
+          fallbackImages
+        )
 
         console.log(`[${store.name}] Extracted ${products.length} products`)
 
@@ -1173,10 +1329,12 @@ Deno.serve(async (req) => {
             : await extractSpecs(listing.title, listing.description)
 
           let finalImageUrls = listing.image_urls || []
-          if (source === 'tradera' && finalImageUrls.length > 0) {
+          const shouldCacheExternalImages = source === 'tradera' || source === 'stores'
+
+          if (shouldCacheExternalImages && finalImageUrls.length > 0) {
             const cachedUrls = await cacheExternalImagesToStorage(
               supabaseAdmin,
-              source,
+              listing.source || source,
               listing.source_id,
               finalImageUrls
             )
