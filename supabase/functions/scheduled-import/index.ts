@@ -742,6 +742,31 @@ function isLikelyProductUrl(url: string, storeSource: string): boolean {
   return value.includes('/products/') || value.includes('/produkt/')
 }
 
+function titleFromProductUrl(productUrl: string): string {
+  try {
+    const parsed = new URL(productUrl)
+    const path = parsed.pathname
+
+    let slug = path.split('/').filter(Boolean).pop() || ''
+    slug = slug
+      .replace(/\.html.*$/i, '')
+      .replace(/^[0-9]+-/, '')
+      .replace(/\?.*$/, '')
+      .replace(/#.*/, '')
+      .replace(/-/g, ' ')
+      .trim()
+
+    if (!slug) return ''
+    return slug
+      .split(' ')
+      .filter(Boolean)
+      .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+      .join(' ')
+  } catch {
+    return ''
+  }
+}
+
 function extractProductsFromMarkdownLinks(
   markdown: string,
   storeSource: string,
@@ -750,55 +775,30 @@ function extractProductsFromMarkdownLinks(
 ): ExternalListingInput[] {
   const productsByUrl = new Map<string, ExternalListingInput>()
   const safeFallbackImage = fallbackImages.find(isLikelyImageUrl)
+  const urlRegex = /(https?:\/\/[^\s)"'\\]+|\/[a-z0-9][^\s)"'\\]*)/gi
 
-  const imageLinkRegex = /\[!\[[^\]]*\]\((https?:\/\/[^)\s]+)\)\]\((https?:\/\/[^)\s]+)\)/g
   let match: RegExpExecArray | null
+  while ((match = urlRegex.exec(markdown)) !== null) {
+    const rawUrl = match[1]
+    const absolute = toAbsoluteUrl(sourceUrl, rawUrl)
+    if (!absolute || !isLikelyProductUrl(absolute, storeSource)) continue
 
-  while ((match = imageLinkRegex.exec(markdown)) !== null) {
-    const imageUrl = match[1]
-    const productUrlRaw = match[2]
-    const productUrl = toAbsoluteUrl(sourceUrl, productUrlRaw)
-    if (!productUrl || !isLikelyProductUrl(productUrl, storeSource)) continue
+    if (!productsByUrl.has(absolute)) {
+      const title = titleFromProductUrl(absolute)
+      if (!title || isCategoryLikeTitle(title)) continue
 
-    if (!productsByUrl.has(productUrl)) {
-      productsByUrl.set(productUrl, {
+      productsByUrl.set(absolute, {
         source: storeSource,
-        source_id: `${storeSource}-${productUrl.toLowerCase().replace(/[^a-z0-9]/g, '-').slice(-60)}`,
-        title: '',
-        source_url: productUrl,
-        image_urls: isLikelyImageUrl(imageUrl) ? [imageUrl] : (safeFallbackImage ? [safeFallbackImage] : []),
+        source_id: `${storeSource}-${title.toLowerCase().replace(/[^a-z0-9åäö]/g, '-').substring(0, 60)}`,
+        title,
+        source_url: absolute,
+        image_urls: safeFallbackImage ? [safeFallbackImage] : [],
         published_at: new Date().toISOString(),
       })
     }
   }
 
-  const headingLinkRegex = /##\s+\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g
-  while ((match = headingLinkRegex.exec(markdown)) !== null) {
-    const title = match[1]?.trim()
-    const productUrlRaw = match[2]
-    const productUrl = toAbsoluteUrl(sourceUrl, productUrlRaw)
-
-    if (!title || isCategoryLikeTitle(title) || !productUrl || !isLikelyProductUrl(productUrl, storeSource)) continue
-
-    const existing = productsByUrl.get(productUrl)
-    if (existing) {
-      existing.title = title
-      continue
-    }
-
-    productsByUrl.set(productUrl, {
-      source: storeSource,
-      source_id: `${storeSource}-${title.toLowerCase().replace(/[^a-z0-9åäö]/g, '-').substring(0, 60)}`,
-      title,
-      source_url: productUrl,
-      image_urls: safeFallbackImage ? [safeFallbackImage] : [],
-      published_at: new Date().toISOString(),
-    })
-  }
-
-  return Array.from(productsByUrl.values())
-    .filter((item) => item.title && !isCategoryLikeTitle(item.title))
-    .slice(0, 30)
+  return Array.from(productsByUrl.values()).slice(0, 30)
 }
 
 function extractImageUrlsFromHtml(html: string, baseUrl: string): string[] {
