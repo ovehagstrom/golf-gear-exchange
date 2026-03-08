@@ -263,6 +263,22 @@ export function ListingFilters({ filters, onFiltersChange }: ListingFiltersProps
         </Select>
       </div>
 
+      {/* Source */}
+      <div className="space-y-2">
+        <Label>Källa</Label>
+        <Select value={filters.source || "all"} onValueChange={(v) => updateFilter('source', v === "all" ? "" : v)}>
+          <SelectTrigger>
+            <SelectValue placeholder="Alla källor" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Alla källor</SelectItem>
+            {SOURCES.map((s) => (
+              <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
       {/* Clear Filters */}
       {activeFilterCount > 0 && (
         <Button variant="outline" onClick={clearFilters} className="w-full">

@@ -24,7 +24,6 @@ export default function Listings() {
   const [externalListings, setExternalListings] = useState<ExternalListing[]>([]);
   const [loading, setLoading] = useState(true);
   const [sortBy, setSortBy] = useState('newest');
-  const [sourceFilter, setSourceFilter] = useState(searchParams.get('source') || 'all');
 
   const [filters, setFilters] = useState<FilterState>({
     category: searchParams.get('category') || '',
@@ -35,6 +34,7 @@ export default function Listings() {
     condition: searchParams.get('condition') || '',
     city: searchParams.get('city') || '',
     search: searchParams.get('search') || '',
+    source: searchParams.get('source') || '',
   });
 
   // Sync filters when URL params change
@@ -48,8 +48,8 @@ export default function Listings() {
       condition: searchParams.get('condition') || '',
       city: searchParams.get('city') || '',
       search: searchParams.get('search') || '',
+      source: searchParams.get('source') || '',
     });
-    setSourceFilter(searchParams.get('source') || 'all');
   }, [searchParams.toString()]);
 
   useEffect(() => {
