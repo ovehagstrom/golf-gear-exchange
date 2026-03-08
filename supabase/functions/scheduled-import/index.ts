@@ -1030,11 +1030,6 @@ async function fetchGolfStores(selectedStoreSources: string[] = []): Promise<Ext
           fallbackImages
         )
 
-        for (const p of products) {
-          p.source = store.source
-          p.source_id = `${store.source}-${p.source_id}`
-        }
-
         console.log(`[${store.name}] Extracted ${products.length} products`)
 
         if (products.length > bestProducts.length) {
