@@ -1462,6 +1462,11 @@ Deno.serve(async (req) => {
     if (Array.isArray(body.storeSources)) {
       storeSources = body.storeSources.filter((s: unknown): s is string => typeof s === 'string')
     }
+
+    // Manual runs without explicit store selection focus on Golfbidder to guarantee full category coverage
+    if (isManual && storeSources.length === 0) {
+      storeSources = ['golfbidder']
+    }
   } catch {
     // No body — run all sources
   }
