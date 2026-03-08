@@ -679,7 +679,39 @@ const GOLF_STORES: StoreConfig[] = [
   },
 ]
 
-async function scrapeWithFirecrawl(url: string): Promise<string | null> {
+interface ScrapeResult {
+  markdown: string
+  imageCandidates: string[]
+}
+
+function toAbsoluteUrl(baseUrl: string, maybeRelative: string): string | null {
+  try {
+    return new URL(maybeRelative, baseUrl).toString()
+  } catch {
+    return null
+  }
+}
+
+function extractImageUrlsFromHtml(html: string, baseUrl: string): string[] {
+  const urls = new Set<string>()
+  const imgRegex = /<img[^>]+src=["']([^"']+)["']/gi
+  let match: RegExpExecArray | null
+
+  while ((match = imgRegex.exec(html)) !== null) {
+    const raw = match[1]
+    if (!raw || raw.startsWith('data:')) continue
+    const absolute = toAbsoluteUrl(baseUrl, raw)
+    if (!absolute) continue
+
+    if (/\.(jpg|jpeg|png|webp|avif)(\?|$)/i.test(absolute) || absolute.includes('/images/') || absolute.includes('/image/')) {
+      urls.add(absolute)
+    }
+  }
+
+  return Array.from(urls).slice(0, 8)
+}
+
+async function scrapeWithFirecrawl(url: string): Promise<ScrapeResult | null> {
   const apiKey = Deno.env.get('FIRECRAWL_API_KEY')
   if (!apiKey) {
     console.warn('[Firecrawl] FIRECRAWL_API_KEY not set')
@@ -699,7 +731,7 @@ async function scrapeWithFirecrawl(url: string): Promise<string | null> {
       },
       body: JSON.stringify({
         url,
-        formats: ['markdown'],
+        formats: ['markdown', 'html'],
         onlyMainContent: true,
         waitFor: 3000,
       }),
@@ -712,7 +744,14 @@ async function scrapeWithFirecrawl(url: string): Promise<string | null> {
     }
 
     const data = await response.json()
-    return data?.data?.markdown || data?.markdown || null
+    const markdown = data?.data?.markdown || data?.markdown || ''
+    const html = data?.data?.html || data?.html || ''
+    const htmlImages = html ? extractImageUrlsFromHtml(html, url) : []
+
+    return {
+      markdown,
+      imageCandidates: htmlImages,
+    }
   } catch (err) {
     if (err instanceof DOMException && err.name === 'AbortError') {
       console.error(`[Firecrawl] Timeout for ${url}`)
@@ -725,10 +764,30 @@ async function scrapeWithFirecrawl(url: string): Promise<string | null> {
   }
 }
 
+function extractImageUrlsFromMarkdown(markdown: string): string[] {
+  const urls = new Set<string>()
+
+  const imageRegex = /!\[[^\]]*\]\((https?:\/\/[^)\s]+)\)/g
+  let match: RegExpExecArray | null
+  while ((match = imageRegex.exec(markdown)) !== null) {
+    const url = match[1]
+    if (url && !url.includes('data:image')) urls.add(url)
+  }
+
+  const directImageRegex = /(https?:\/\/[^\s)]+\.(?:jpg|jpeg|png|webp|avif))(?:\?[^\s)]*)?/gi
+  while ((match = directImageRegex.exec(markdown)) !== null) {
+    const url = match[1]
+    if (url && !url.includes('data:image')) urls.add(url)
+  }
+
+  return Array.from(urls).slice(0, 4)
+}
+
 async function extractProductsFromMarkdown(
   markdown: string,
   storeName: string,
-  sourceUrl: string
+  sourceUrl: string,
+  fallbackImages: string[]
 ): Promise<ExternalListingInput[]> {
   const apiKey = Deno.env.get('LOVABLE_API_KEY')
   if (!apiKey) return []
@@ -748,7 +807,7 @@ async function extractProductsFromMarkdown(
           {
             role: 'system',
             content: `Du extraherar golfprodukter från webbsidors innehåll. Svara BARA med en JSON-array med produkter.
-Varje produkt ska ha: title (string), price (number i SEK, utan "kr"), brand (string), category (driver/fairway_wood/hybrid/iron_set/wedge/putter/shaft/complete_set/bag/accessories/other).
+Varje produkt ska ha: title (string), price (number i SEK, utan "kr"), brand (string), category (driver/fairway_wood/hybrid/iron_set/wedge/putter/shaft/complete_set/bag/accessories/other), image_url (string, absolut URL om tillgänglig).
 Inkludera BARA golfklubbor (inte bollar, kläder, skor, bagar, vagnar, tillbehör).
 Om du inte kan hitta några produkter, svara med tom array [].
 Max 30 produkter.`,
@@ -778,18 +837,24 @@ Max 30 produkter.`,
 
     return products
       .filter((p: Record<string, unknown>) => p.title && typeof p.title === 'string')
-      .map((p: Record<string, unknown>) => ({
-        source: storeName.toLowerCase().replace(/[^a-z0-9]/g, '_'),
-        source_id: `${storeName.toLowerCase().replace(/[^a-z0-9]/g, '_')}-${(p.title as string).toLowerCase().replace(/[^a-z0-9åäö]/g, '-').substring(0, 60)}`,
-        title: p.title as string,
-        price: typeof p.price === 'number' ? Math.round(p.price) : undefined,
-        city: undefined,
-        source_url: sourceUrl,
-        image_urls: [],
-        description: undefined,
-        published_at: new Date().toISOString(),
-        category: (p.category as string) || undefined,
-      }))
+      .map((p: Record<string, unknown>, index: number) => {
+        const aiImage = typeof p.image_url === 'string' ? p.image_url : undefined
+        const fallbackImage = fallbackImages[index % Math.max(1, fallbackImages.length)]
+        const chosenImage = aiImage || fallbackImage
+
+        return {
+          source: storeName.toLowerCase().replace(/[^a-z0-9]/g, '_'),
+          source_id: `${storeName.toLowerCase().replace(/[^a-z0-9]/g, '_')}-${(p.title as string).toLowerCase().replace(/[^a-z0-9åäö]/g, '-').substring(0, 60)}`,
+          title: p.title as string,
+          price: typeof p.price === 'number' ? Math.round(p.price) : undefined,
+          city: undefined,
+          source_url: sourceUrl,
+          image_urls: chosenImage ? [chosenImage] : [],
+          description: undefined,
+          published_at: new Date().toISOString(),
+          category: (p.category as string) || undefined,
+        }
+      })
   } catch (err) {
     console.error('[AI] Product extraction error:', err)
     return []
@@ -803,35 +868,54 @@ async function fetchGolfStores(): Promise<ExternalListingInput[]> {
     return []
   }
 
-  // Scrape ALL stores every run, but only one category URL per store to stay within timeout
+  // Scrape ALL stores every run. Use up to 2 fallback URLs per store.
   const hour = new Date().getUTCHours()
   const concurrency = 4
 
   const processStore = async (store: StoreConfig): Promise<ExternalListingInput[]> => {
-    const url = store.urls[hour % store.urls.length]
-    if (!url) return []
+    const primaryUrls = [
+      store.urls[hour % store.urls.length],
+      store.urls[(hour + 1) % store.urls.length],
+    ].filter((u, i, arr): u is string => Boolean(u) && arr.indexOf(u) === i)
 
-    console.log(`[${store.name}] Scraping URL: ${url}`)
+    const homepageFallback = primaryUrls[0] ? toAbsoluteUrl(primaryUrls[0], '/') : null
+    const selectedUrls = Array.from(new Set([...primaryUrls, ...(homepageFallback ? [homepageFallback] : [])]))
 
-    try {
-      const markdown = await scrapeWithFirecrawl(url)
-      if (!markdown || markdown.length < 100) {
-        console.warn(`[${store.name}] No content from ${url}`)
-        return []
+    let bestProducts: ExternalListingInput[] = []
+
+    for (const url of selectedUrls) {
+      console.log(`[${store.name}] Scraping URL: ${url}`)
+
+      try {
+        const scrapeResult = await scrapeWithFirecrawl(url)
+        if (!scrapeResult || !scrapeResult.markdown || scrapeResult.markdown.length < 100) {
+          console.warn(`[${store.name}] No content from ${url}`)
+          continue
+        }
+
+        const markdownImages = extractImageUrlsFromMarkdown(scrapeResult.markdown)
+        const fallbackImages = Array.from(new Set([...scrapeResult.imageCandidates, ...markdownImages])).slice(0, 8)
+        const products = await extractProductsFromMarkdown(scrapeResult.markdown, store.name, url, fallbackImages)
+
+        for (const p of products) {
+          p.source = store.source
+          p.source_id = `${store.source}-${p.source_id}`
+        }
+
+        console.log(`[${store.name}] Extracted ${products.length} products`)
+
+        if (products.length > bestProducts.length) {
+          bestProducts = products
+        }
+
+        // enough results for this store, skip next fallback URL
+        if (bestProducts.length >= 10) break
+      } catch (err) {
+        console.error(`[${store.name}] Error scraping ${url}:`, err)
       }
-
-      const products = await extractProductsFromMarkdown(markdown, store.name, url)
-      for (const p of products) {
-        p.source = store.source
-        p.source_id = `${store.source}-${p.source_id}`
-      }
-
-      console.log(`[${store.name}] Extracted ${products.length} products`)
-      return products
-    } catch (err) {
-      console.error(`[${store.name}] Error scraping ${url}:`, err)
-      return []
     }
+
+    return bestProducts
   }
 
   const allResults: ExternalListingInput[] = []
