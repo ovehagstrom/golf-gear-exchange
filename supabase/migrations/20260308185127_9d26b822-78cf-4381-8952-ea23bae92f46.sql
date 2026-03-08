@@ -1,0 +1,1 @@
+UPDATE external_listings SET is_active = false WHERE source = 'golfbidder' AND (price IS NULL OR title IN ('Manaders Garanti', 'Dagars Provotid', 'Transportorens Ombud', 'Leveranser Information', 'Vanliga Fragor', 'Kontakta Oss', 'Subscribe Newsletters', 'Prissattning Och Vardering', 'Vad Vi Inte Koper', 'Hur Salja Dina Gamla Golfklubbor'));

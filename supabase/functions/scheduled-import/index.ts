@@ -532,16 +532,7 @@ const GOLF_STORES: StoreConfig[] = [
       'https://www.scandigolf.se/collections/putters',
     ],
   },
-  {
-    name: 'Swegolf',
-    source: 'swegolf',
-    urls: [
-      'https://www.swegolf.se/collections/golfklubbor',
-      'https://www.swegolf.se/collections/drivers',
-      'https://www.swegolf.se/collections/jarnset',
-      'https://www.swegolf.se/collections/putters',
-    ],
-  },
+  // Swegolf removed — domain expired/for sale as of 2026-03
   {
     name: 'Dimbo Golf',
     source: 'dimbo-golf',
@@ -691,7 +682,7 @@ const CATEGORY_ONLY_TITLES = new Set([
   'enstaka järn', 'lösa juniorklubbor', 'juniorklubbpaket', 'skaft', 'helset', 'klubbor', 'golfklubbor',
 ])
 
-const STRICT_PRODUCT_URL_SOURCES = new Set(['scandigolf', 'swegolf', 'golfbutik', 'dimbogolf', 'dimbo-golf', 'golfbidder'])
+const STRICT_PRODUCT_URL_SOURCES = new Set(['scandigolf', 'golfbutik', 'dimbogolf', 'dimbo-golf', 'golfbidder'])
 
 function toAbsoluteUrl(baseUrl: string, maybeRelative: string): string | null {
   try {
@@ -730,7 +721,7 @@ function hasBlockedImageTokens(url: string): boolean {
 function isLikelyProductUrl(url: string, storeSource: string): boolean {
   const value = url.toLowerCase()
 
-  if (storeSource === 'scandigolf' || storeSource === 'swegolf') {
+  if (storeSource === 'scandigolf') {
     return value.includes('/products/')
   }
 
@@ -746,11 +737,13 @@ function isLikelyProductUrl(url: string, storeSource: string): boolean {
 
   if (storeSource === 'golfbidder') {
     if (!value.includes('golfbidder.com/sv/')) return false
-    if (value.includes('/golfklubbor') || value.includes('/soekalternativ') || value.includes('/byt-salj') || value.includes('/guider') || value.includes('/presentkort') || value.includes('/club-finder') || value.includes('/account') || value.includes('/customer') || value.includes('/checkout') || value.includes('/cart')) return false
+    // Exclude known non-product paths
+    const golfbidderExcludes = ['/golfklubbor', '/soekalternativ', '/byt-salj', '/guider', '/presentkort', '/club-finder', '/account', '/customer', '/checkout', '/cart', '/garanti', '/provotid', '/provperiod', '/leverans', '/fragor', '/kontakta', '/subscribe', '/cookie', '/prissattning', '/vardering', '/vad-vi-inte', '/hur-salja', '/om-oss', '/villkor', '/integritet', '/transportor', '/ombud', '/information', '/nyhetsbrev', '/blog', '/nyheter', '/page/', '/byt-s']
+    if (golfbidderExcludes.some(ex => value.includes(ex))) return false
     const afterSv = value.split('/sv/')[1]
     if (!afterSv) return false
-    // Must have a hyphen (brand-model pattern) and no further slashes
-    return !afterSv.includes('/') && afterSv.length > 10 && afterSv.includes('-')
+    // Must have a hyphen (brand-model pattern), no further slashes, and reasonable length
+    return !afterSv.includes('/') && afterSv.length > 10 && afterSv.includes('-') && afterSv.length < 100
   }
 
   return value.includes('/products/') || value.includes('/produkt/')
@@ -798,7 +791,7 @@ function extractProductsFromMarkdownLinks(
     if (!absolute) continue
 
     // Normalize Shopify collection URLs
-    if (storeSource === 'swegolf' || storeSource === 'scandigolf') {
+    if (storeSource === 'scandigolf') {
       absolute = absolute.replace(/\/collections\/[^/]+\/products\//, '/products/')
     }
 
@@ -998,7 +991,7 @@ function stripFilterNavigation(markdown: string): string {
   // Try to find the start of product listings by looking for common patterns
   const patterns = [
     /\d+-\d+ av \d+ modeller/,       // Golfbidder: "1-30 av 466 modeller"
-    /\d+ resultat\n/,                  // Swegolf: "2 resultat"
+    /\d+ resultat\n/,                  // Generic: "2 resultat"
     /Sorterat efter\n/,                // Golfbidder sort section
     /Visar \d+/,                       // Generic "Visar X produkter"
   ]
@@ -1006,10 +999,22 @@ function stripFilterNavigation(markdown: string): string {
   for (const pattern of patterns) {
     const match = markdown.search(pattern)
     if (match > 500) {
-      // Found product section marker, skip everything before it
       const stripped = markdown.substring(match)
-      if (stripped.length > 200) return stripped
+      if (stripped.length > 200) {
+        // For Golfbidder, skip further to the first product image link [![
+        const firstProduct = stripped.search(/\[!\[/)
+        if (firstProduct > 0 && firstProduct < 500) {
+          return stripped.substring(firstProduct)
+        }
+        return stripped
+      }
     }
+  }
+
+  // Fallback: find first product image pattern directly
+  const firstProductImage = markdown.search(/\[!\[.*?\]\(https?:\/\/.*?\/media\/catalog\/product\//)
+  if (firstProductImage > 500) {
+    return markdown.substring(firstProductImage)
   }
 
   return markdown
@@ -1080,7 +1085,7 @@ Max 30 produkter.`,
     const result: ExternalListingInput[] = []
 
     // Sources where collection pages have lazy-loaded/placeholder images
-    const alwaysFetchProductImage = new Set(['swegolf'])
+    const alwaysFetchProductImage = new Set<string>([])
 
     for (const [index, p] of products.entries()) {
       if (!p || typeof p !== 'object' || !('title' in p) || typeof p.title !== 'string') continue
@@ -1092,21 +1097,12 @@ Max 30 produkter.`,
       let resolvedProductUrl = rawProductUrl ? toAbsoluteUrl(sourceUrl, rawProductUrl) : null
 
       // Normalize Shopify collection URLs: /collections/X/products/Y -> /products/Y
-      if (resolvedProductUrl && (storeSource === 'swegolf' || storeSource === 'scandigolf')) {
+      if (resolvedProductUrl && storeSource === 'scandigolf') {
         resolvedProductUrl = resolvedProductUrl.replace(/\/collections\/[^/]+\/products\//, '/products/')
       }
 
       if (strictSource && (!resolvedProductUrl || !isLikelyProductUrl(resolvedProductUrl, storeSource))) {
         continue
-      }
-
-      // Validate URL doesn't 404 for stores with known broken links
-      if (resolvedProductUrl && storeSource === 'swegolf') {
-        const isValid = await validateProductUrl(resolvedProductUrl)
-        if (!isValid) {
-          console.log(`[${storeSource}] ✗ URL 404: ${resolvedProductUrl}`)
-          continue
-        }
       }
 
       const aiImageRaw = typeof p.image_url === 'string' ? p.image_url : undefined
@@ -1185,14 +1181,25 @@ async function fetchGolfStores(selectedStoreSources: string[] = []): Promise<Ext
   const hour = new Date().getUTCHours()
   const concurrency = 4
 
-  const processStore = async (store: StoreConfig): Promise<ExternalListingInput[]> => {
-    const primaryUrls = [
-      store.urls[hour % store.urls.length],
-      store.urls[(hour + 1) % store.urls.length],
-    ].filter((u, i, arr): u is string => Boolean(u) && arr.indexOf(u) === i)
+  // Sources with many category URLs should scrape ALL of them each run
+  const SCRAPE_ALL_URLS_SOURCES = new Set(['golfbidder', 'dormy', 'scandigolf', 'golfbutik'])
 
-    const homepageFallback = primaryUrls[0] ? toAbsoluteUrl(primaryUrls[0], '/') : null
-    const selectedUrls = Array.from(new Set([...primaryUrls, ...(homepageFallback ? [homepageFallback] : [])]))
+  const processStore = async (store: StoreConfig): Promise<ExternalListingInput[]> => {
+    let selectedUrls: string[]
+
+    if (SCRAPE_ALL_URLS_SOURCES.has(store.source)) {
+      // Scrape all category URLs for these stores
+      selectedUrls = [...store.urls]
+    } else {
+      // Rotate 2 URLs + homepage fallback for other stores
+      const primaryUrls = [
+        store.urls[hour % store.urls.length],
+        store.urls[(hour + 1) % store.urls.length],
+      ].filter((u, i, arr): u is string => Boolean(u) && arr.indexOf(u) === i)
+
+      const homepageFallback = primaryUrls[0] ? toAbsoluteUrl(primaryUrls[0], '/') : null
+      selectedUrls = Array.from(new Set([...primaryUrls, ...(homepageFallback ? [homepageFallback] : [])]))
+    }
 
     let bestProducts: ExternalListingInput[] = []
 
@@ -1218,12 +1225,16 @@ async function fetchGolfStores(selectedStoreSources: string[] = []): Promise<Ext
 
         console.log(`[${store.name}] Extracted ${products.length} products`)
 
-        if (products.length > bestProducts.length) {
-          bestProducts = products
+        if (SCRAPE_ALL_URLS_SOURCES.has(store.source)) {
+          // Accumulate products from all category pages
+          bestProducts.push(...products)
+        } else {
+          if (products.length > bestProducts.length) {
+            bestProducts = products
+          }
+          // enough results for this store, skip next fallback URL
+          if (bestProducts.length >= 10) break
         }
-
-        // enough results for this store, skip next fallback URL
-        if (bestProducts.length >= 10) break
       } catch (err) {
         console.error(`[${store.name}] Error scraping ${url}:`, err)
       }
