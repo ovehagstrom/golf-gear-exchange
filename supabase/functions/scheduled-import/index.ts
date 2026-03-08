@@ -1031,6 +1031,7 @@ async function extractProductsFromMarkdown(
   // Strip filter/navigation content to avoid truncating before products
   const cleanedMarkdown = stripFilterNavigation(markdown)
   const truncated = cleanedMarkdown.substring(0, 14000)
+  console.log(`[AI] ${storeName}: markdown ${markdown.length} chars → cleaned ${cleanedMarkdown.length} → truncated ${truncated.length}. First 200: ${truncated.substring(0, 200).replace(/\n/g, ' ')}`)
 
   try {
     const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
