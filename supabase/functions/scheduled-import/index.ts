@@ -795,8 +795,15 @@ function extractProductsFromMarkdownLinks(
   let match: RegExpExecArray | null
   while ((match = urlRegex.exec(markdown)) !== null) {
     const rawUrl = match[1]
-    const absolute = toAbsoluteUrl(sourceUrl, rawUrl)
-    if (!absolute || !isLikelyProductUrl(absolute, storeSource)) continue
+    let absolute = toAbsoluteUrl(sourceUrl, rawUrl)
+    if (!absolute) continue
+
+    // Normalize Shopify collection URLs
+    if (storeSource === 'swegolf' || storeSource === 'scandigolf') {
+      absolute = absolute.replace(/\/collections\/[^/]+\/products\//, '/products/')
+    }
+
+    if (!isLikelyProductUrl(absolute, storeSource)) continue
 
     if (!productsByUrl.has(absolute)) {
       const title = titleFromProductUrl(absolute)
