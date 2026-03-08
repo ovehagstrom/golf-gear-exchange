@@ -686,9 +686,13 @@ async function scrapeWithFirecrawl(url: string): Promise<string | null> {
     return null
   }
 
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), 20_000)
+
   try {
     const response = await fetch('https://api.firecrawl.dev/v1/scrape', {
       method: 'POST',
+      signal: controller.signal,
       headers: {
         'Authorization': `Bearer ${apiKey}`,
         'Content-Type': 'application/json',
@@ -697,7 +701,7 @@ async function scrapeWithFirecrawl(url: string): Promise<string | null> {
         url,
         formats: ['markdown'],
         onlyMainContent: true,
-        waitFor: 5000,
+        waitFor: 3000,
       }),
     })
 
@@ -710,8 +714,14 @@ async function scrapeWithFirecrawl(url: string): Promise<string | null> {
     const data = await response.json()
     return data?.data?.markdown || data?.markdown || null
   } catch (err) {
-    console.error(`[Firecrawl] Scrape error for ${url}:`, err)
+    if (err instanceof DOMException && err.name === 'AbortError') {
+      console.error(`[Firecrawl] Timeout for ${url}`)
+    } else {
+      console.error(`[Firecrawl] Scrape error for ${url}:`, err)
+    }
     return null
+  } finally {
+    clearTimeout(timeout)
   }
 }
 
@@ -723,7 +733,6 @@ async function extractProductsFromMarkdown(
   const apiKey = Deno.env.get('LOVABLE_API_KEY')
   if (!apiKey) return []
 
-  // Truncate to avoid token limits
   const truncated = markdown.substring(0, 8000)
 
   try {
@@ -740,10 +749,9 @@ async function extractProductsFromMarkdown(
             role: 'system',
             content: `Du extraherar golfprodukter från webbsidors innehåll. Svara BARA med en JSON-array med produkter.
 Varje produkt ska ha: title (string), price (number i SEK, utan "kr"), brand (string), category (driver/fairway_wood/hybrid/iron_set/wedge/putter/shaft/complete_set/bag/accessories/other).
-Om priset har "original price" och "discounted price", använd discounted price.
 Inkludera BARA golfklubbor (inte bollar, kläder, skor, bagar, vagnar, tillbehör).
 Om du inte kan hitta några produkter, svara med tom array [].
-Max 50 produkter.`,
+Max 30 produkter.`,
           },
           {
             role: 'user',
@@ -751,7 +759,7 @@ Max 50 produkter.`,
           },
         ],
         temperature: 0.1,
-        max_tokens: 4000,
+        max_tokens: 2500,
       }),
     })
 
@@ -783,7 +791,7 @@ Max 50 produkter.`,
         category: (p.category as string) || undefined,
       }))
   } catch (err) {
-    console.error(`[AI] Product extraction error:`, err)
+    console.error('[AI] Product extraction error:', err)
     return []
   }
 }
@@ -795,49 +803,47 @@ async function fetchGolfStores(): Promise<ExternalListingInput[]> {
     return []
   }
 
-  const allResults: ExternalListingInput[] = []
-
-  // Process max 5 stores per run to avoid timeout
-  // Rotate which stores get scraped based on current hour
+  // Scrape ALL stores every run, but only one category URL per store to stay within timeout
   const hour = new Date().getUTCHours()
-  const batchSize = 3
-  const startIdx = (hour % Math.ceil(GOLF_STORES.length / batchSize)) * batchSize
-  const storeBatch = GOLF_STORES.slice(startIdx, startIdx + batchSize)
-  console.log(`[Stores] Processing batch ${startIdx}-${startIdx + storeBatch.length} of ${GOLF_STORES.length} stores`)
+  const concurrency = 4
 
-  for (const store of storeBatch) {
-    console.log(`[${store.name}] Scraping ${store.urls.length} URLs...`)
+  const processStore = async (store: StoreConfig): Promise<ExternalListingInput[]> => {
+    const url = store.urls[hour % store.urls.length]
+    if (!url) return []
 
-    for (const url of store.urls) {
-      try {
-        const markdown = await scrapeWithFirecrawl(url)
-        if (!markdown || markdown.length < 100) {
-          console.warn(`[${store.name}] No content from ${url}`)
-          continue
-        }
+    console.log(`[${store.name}] Scraping URL: ${url}`)
 
-        console.log(`[${store.name}] Got ${markdown.length} chars from ${url}`)
-        const products = await extractProductsFromMarkdown(markdown, store.name, url)
-
-        // Override source with store config source
-        for (const p of products) {
-          p.source = store.source
-          p.source_id = `${store.source}-${p.source_id}`
-        }
-
-        allResults.push(...products)
-        console.log(`[${store.name}] Extracted ${products.length} products from ${url}`)
-      } catch (err) {
-        console.error(`[${store.name}] Error scraping ${url}:`, err)
+    try {
+      const markdown = await scrapeWithFirecrawl(url)
+      if (!markdown || markdown.length < 100) {
+        console.warn(`[${store.name}] No content from ${url}`)
+        return []
       }
 
-      // Rate limit: 1s between requests
-      await new Promise(r => setTimeout(r, 1000))
+      const products = await extractProductsFromMarkdown(markdown, store.name, url)
+      for (const p of products) {
+        p.source = store.source
+        p.source_id = `${store.source}-${p.source_id}`
+      }
+
+      console.log(`[${store.name}] Extracted ${products.length} products`)
+      return products
+    } catch (err) {
+      console.error(`[${store.name}] Error scraping ${url}:`, err)
+      return []
     }
   }
 
+  const allResults: ExternalListingInput[] = []
+
+  for (let i = 0; i < GOLF_STORES.length; i += concurrency) {
+    const chunk = GOLF_STORES.slice(i, i + concurrency)
+    const chunkResults = await Promise.all(chunk.map(processStore))
+    allResults.push(...chunkResults.flat())
+  }
+
   const deduped = dedupeListingsBySourceId(allResults)
-  console.log(`[Stores] Total: ${allResults.length} raw, ${deduped.length} unique from batch of ${storeBatch.length} stores`)
+  console.log(`[Stores] Total: ${allResults.length} raw, ${deduped.length} unique from ${GOLF_STORES.length} stores`)
   return deduped
 }
 
