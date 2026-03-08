@@ -1479,10 +1479,12 @@ Deno.serve(async (req) => {
         const fetchedListings = source === 'stores'
           ? await fetchGolfStores(storeSources)
           : await fetcher()
-        // Don't limit store products — they're already curated from golf-specific pages
-        const storeLimit = source === 'stores' ? Math.max(maxListingsPerSource, 500) : maxListingsPerSource
-        const listings = sortByPublishedDesc(fetchedListings).slice(0, storeLimit)
-        console.log(`[${source}] Processing ${listings.length}/${fetchedListings.length} listings (limit: ${storeLimit})`)
+        // Keep store imports broad, but cap marketplace processing to avoid worker CPU exhaustion
+        const sourceLimit = source === 'stores'
+          ? Math.max(maxListingsPerSource, 500)
+          : Math.min(maxListingsPerSource, isManual ? 120 : 80)
+        const listings = sortByPublishedDesc(fetchedListings).slice(0, sourceLimit)
+        console.log(`[${source}] Processing ${listings.length}/${fetchedListings.length} listings (limit: ${sourceLimit})`)
 
         for (const listing of listings) {
           if (!listing.source_id || !listing.title || !listing.source_url) {
