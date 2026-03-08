@@ -571,6 +571,7 @@ Deno.serve(async (req) => {
   let maxAgeDays = 1 // default for scheduled runs: last 24h
   let isManual = false
   let forceInline = false
+  let maxListingsPerSource = 120
 
   try {
     const body = await req.json().catch(() => ({}))
@@ -580,9 +581,13 @@ Deno.serve(async (req) => {
     if (body.time === 'manual') {
       isManual = true
       maxAgeDays = 7 // manual: last 7 days
+      maxListingsPerSource = 250
     }
     if (body.maxAgeDays && typeof body.maxAgeDays === 'number') {
       maxAgeDays = body.maxAgeDays
+    }
+    if (body.maxListingsPerSource && typeof body.maxListingsPerSource === 'number') {
+      maxListingsPerSource = Math.max(1, Math.min(500, body.maxListingsPerSource))
     }
     if (body.mode === 'inline') {
       forceInline = true
@@ -592,7 +597,9 @@ Deno.serve(async (req) => {
   }
 
   const cutoffDate = new Date(Date.now() - maxAgeDays * 24 * 60 * 60 * 1000)
-  console.log(`[import] Mode: ${isManual ? 'manual' : 'scheduled'}, maxAgeDays: ${maxAgeDays}, cutoff: ${cutoffDate.toISOString()}`)
+  console.log(
+    `[import] Mode: ${isManual ? 'manual' : 'scheduled'}, maxAgeDays: ${maxAgeDays}, maxListingsPerSource: ${maxListingsPerSource}, cutoff: ${cutoffDate.toISOString()}`
+  )
 
   const importTask = async () => {
     const results: Record<string, ImportStats> = {}
@@ -609,8 +616,9 @@ Deno.serve(async (req) => {
 
       try {
         console.log(`[${source}] Starting fetch...`)
-        const listings = await fetcher()
-        console.log(`[${source}] Fetched ${listings.length} raw listings`)
+        const fetchedListings = await fetcher()
+        const listings = sortByPublishedDesc(fetchedListings).slice(0, maxListingsPerSource)
+        console.log(`[${source}] Processing ${listings.length}/${fetchedListings.length} listings`)
 
         for (const listing of listings) {
           if (!listing.source_id || !listing.title || !listing.source_url) {
