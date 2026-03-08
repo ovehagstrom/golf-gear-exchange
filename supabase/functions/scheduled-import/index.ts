@@ -865,8 +865,9 @@ Max 30 produkter.`,
     return products
       .filter((p: Record<string, unknown>) => p.title && typeof p.title === 'string')
       .map((p: Record<string, unknown>, index: number) => {
-        const aiImage = typeof p.image_url === 'string' ? p.image_url : undefined
-        const fallbackImage = fallbackImages[index % Math.max(1, fallbackImages.length)]
+        const aiImageRaw = typeof p.image_url === 'string' ? p.image_url : undefined
+        const aiImage = aiImageRaw && isLikelyImageUrl(aiImageRaw) ? aiImageRaw : undefined
+        const fallbackImage = fallbackImages.find(isLikelyImageUrl)
         const chosenImage = aiImage || fallbackImage
 
         return {
