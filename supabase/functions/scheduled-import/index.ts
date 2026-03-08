@@ -1106,8 +1106,28 @@ Max 30 produkter.`
     })
 
     if (!response.ok) {
-      console.error(`[AI] Product extraction failed: ${response.status}`)
-      return []
+      console.error(`[AI] Product extraction failed: ${response.status}, using regex fallback`)
+      // Fall through to regex/link-based extraction below
+      const linkProducts = extractProductsFromMarkdownLinks(cleanedMarkdown, storeSource, sourceUrl, fallbackImages.filter(isLikelyImageUrl))
+      console.log(`[regex-fallback] Found ${linkProducts.length} link products for ${storeSource}`)
+      
+      // Enrich link-extracted products with price/image from product pages
+      const enriched: ExternalListingInput[] = []
+      for (const product of linkProducts) {
+        if (product.source_url) {
+          const meta = await resolveProductMetaFromUrl(product.source_url)
+          if (meta.price) product.price = meta.price
+          if (meta.imageUrl) product.image_urls = [meta.imageUrl]
+          
+          if (storeSource === 'golfbidder' && !product.price) {
+            console.log(`[regex-fallback] Skipped (no price): ${product.source_url}`)
+            continue
+          }
+        }
+        enriched.push(product)
+      }
+      console.log(`[regex-fallback] Enriched ${enriched.length} ${storeSource} products`)
+      return enriched
     }
 
     const data = await response.json()
