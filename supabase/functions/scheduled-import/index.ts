@@ -560,8 +560,10 @@ Deno.serve(async (req) => {
   )
 
   let sourcesToRun = Object.keys(SOURCE_FETCHERS)
-  let maxAgeDays = 1 // default for cron: last 24h
+  let maxAgeDays = 1 // default for scheduled runs: last 24h
   let isManual = false
+  let forceInline = false
+
   try {
     const body = await req.json().catch(() => ({}))
     if (body.sources && Array.isArray(body.sources)) {
@@ -574,14 +576,16 @@ Deno.serve(async (req) => {
     if (body.maxAgeDays && typeof body.maxAgeDays === 'number') {
       maxAgeDays = body.maxAgeDays
     }
+    if (body.mode === 'inline') {
+      forceInline = true
+    }
   } catch {
     // No body — run all sources
   }
 
   const cutoffDate = new Date(Date.now() - maxAgeDays * 24 * 60 * 60 * 1000)
-  console.log(`[import] Mode: ${isManual ? 'manual' : 'cron'}, maxAgeDays: ${maxAgeDays}, cutoff: ${cutoffDate.toISOString()}`)
+  console.log(`[import] Mode: ${isManual ? 'manual' : 'scheduled'}, maxAgeDays: ${maxAgeDays}, cutoff: ${cutoffDate.toISOString()}`)
 
-  // Run the import in the background so the client doesn't time out
   const importTask = async () => {
     const results: Record<string, ImportStats> = {}
 
@@ -606,7 +610,6 @@ Deno.serve(async (req) => {
             continue
           }
 
-          // Age filter: skip listings older than cutoff
           if (listing.published_at) {
             const publishedDate = new Date(listing.published_at)
             if (publishedDate < cutoffDate) {
@@ -615,14 +618,12 @@ Deno.serve(async (req) => {
             }
           }
 
-          // Layer 1: Keyword blocklist (fast, no AI cost)
           if (isKeywordFiltered(listing.title, listing.description)) {
             console.log(`[${source}] ✗ Keyword filtered: "${listing.title.substring(0, 50)}"`)
             stats.skipped_keyword_filtered++
             continue
           }
 
-          // Layer 2: AI golf classification (cheap model, before spec extraction)
           const isGolf = await isGolfEquipment(listing.title, listing.description)
           if (!isGolf) {
             console.log(`[${source}] ✗ AI rejected (not golf): "${listing.title.substring(0, 50)}"`)
@@ -630,7 +631,6 @@ Deno.serve(async (req) => {
             continue
           }
 
-          // Layer 3: Extract specs (only for confirmed golf items)
           const specs = await extractSpecs(listing.title, listing.description)
 
           let finalImageUrls = listing.image_urls || []
@@ -671,7 +671,6 @@ Deno.serve(async (req) => {
             console.error(`[${source}] Upsert error:`, error)
             stats.skipped_duplicates++
           } else {
-            console.log(`[${source}] ✓ Imported: "${listing.title.substring(0, 50)}"`)
             stats.imported++
           }
         }
@@ -680,7 +679,6 @@ Deno.serve(async (req) => {
         stats.error = err instanceof Error ? err.message : 'Unknown error'
       }
 
-      // Log to external_import_logs
       await supabaseAdmin.from('external_import_logs').insert({
         source,
         imported_count: stats.imported,
@@ -693,12 +691,16 @@ Deno.serve(async (req) => {
       })
 
       results[source] = stats
-      console.log(`[${source}] Done: ${stats.imported} imported, ${stats.skipped_keyword_filtered} keyword-filtered, ${stats.skipped_non_driver} non-driver, ${stats.skipped_non_golf} AI-rejected, ${stats.skipped_duplicates} skipped/errors`)
+      console.log(`[${source}] Done: imported=${stats.imported}, keyword_filtered=${stats.skipped_keyword_filtered}, ai_rejected=${stats.skipped_non_golf}, skipped=${stats.skipped_duplicates}`)
     }
+
+    return results
   }
 
-  if (isManual) {
-    // Manual: run in background so UI doesn't time out
+  const shouldRunInBackground = !forceInline
+
+  if (shouldRunInBackground) {
+    // Important for scheduled cron: return quickly so pg_net doesn't hit its HTTP timeout.
     // @ts-ignore - EdgeRuntime is available in Supabase Edge Functions
     if (typeof EdgeRuntime !== 'undefined' && EdgeRuntime.waitUntil) {
       // @ts-ignore
@@ -707,23 +709,24 @@ Deno.serve(async (req) => {
       await importTask()
     }
 
-    return new Response(JSON.stringify({ 
-      success: true, 
-      message: 'Import startad i bakgrunden. Kontrollera importhistoriken för resultat.',
-      sources: sourcesToRun,
-    }), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    })
-  } else {
-    // Cron/scheduled: run inline so the task completes before the function exits
-    await importTask()
-
-    return new Response(JSON.stringify({ 
-      success: true, 
-      message: 'Schemalagd import klar.',
+    return new Response(JSON.stringify({
+      success: true,
+      message: isManual
+        ? 'Import startad i bakgrunden. Kontrollera importhistoriken för resultat.'
+        : 'Schemalagd import startad i bakgrunden.',
       sources: sourcesToRun,
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     })
   }
+
+  const results = await importTask()
+  return new Response(JSON.stringify({
+    success: true,
+    message: 'Import klar.',
+    sources: sourcesToRun,
+    results,
+  }), {
+    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+  })
 })
