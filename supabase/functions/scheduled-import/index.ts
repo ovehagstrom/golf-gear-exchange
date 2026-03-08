@@ -544,7 +544,7 @@ const GOLF_STORES: StoreConfig[] = [
   },
   {
     name: 'Dimbo Golf',
-    source: 'dimbogolf',
+    source: 'dimbo-golf',
     urls: [
       'https://www.dimbogolf.se/golfklubbor',
     ],
