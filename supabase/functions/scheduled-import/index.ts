@@ -797,7 +797,15 @@ async function fetchGolfStores(): Promise<ExternalListingInput[]> {
 
   const allResults: ExternalListingInput[] = []
 
-  for (const store of GOLF_STORES) {
+  // Process max 5 stores per run to avoid timeout
+  // Rotate which stores get scraped based on current hour
+  const hour = new Date().getUTCHours()
+  const batchSize = 5
+  const startIdx = (hour % Math.ceil(GOLF_STORES.length / batchSize)) * batchSize
+  const storeBatch = GOLF_STORES.slice(startIdx, startIdx + batchSize)
+  console.log(`[Stores] Processing batch ${startIdx}-${startIdx + storeBatch.length} of ${GOLF_STORES.length} stores`)
+
+  for (const store of storeBatch) {
     console.log(`[${store.name}] Scraping ${store.urls.length} URLs...`)
 
     for (const url of store.urls) {
@@ -829,7 +837,7 @@ async function fetchGolfStores(): Promise<ExternalListingInput[]> {
   }
 
   const deduped = dedupeListingsBySourceId(allResults)
-  console.log(`[Stores] Total: ${allResults.length} raw, ${deduped.length} unique from ${GOLF_STORES.length} stores`)
+  console.log(`[Stores] Total: ${allResults.length} raw, ${deduped.length} unique from batch of ${storeBatch.length} stores`)
   return deduped
 }
 
