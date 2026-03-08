@@ -931,14 +931,18 @@ Max 30 produkter.`,
   }
 }
 
-async function fetchGolfStores(): Promise<ExternalListingInput[]> {
+async function fetchGolfStores(selectedStoreSources: string[] = []): Promise<ExternalListingInput[]> {
   const firecrawlKey = Deno.env.get('FIRECRAWL_API_KEY')
   if (!firecrawlKey) {
     console.log('[Stores] FIRECRAWL_API_KEY not set — skipping store scraping')
     return []
   }
 
-  // Scrape ALL stores every run. Use up to 2 fallback URLs per store.
+  const storesToRun = selectedStoreSources.length > 0
+    ? GOLF_STORES.filter((store) => selectedStoreSources.includes(store.source))
+    : GOLF_STORES
+
+  // Scrape selected stores every run. Use up to 2 fallback URLs per store.
   const hour = new Date().getUTCHours()
   const concurrency = 4
 
