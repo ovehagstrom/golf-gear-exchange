@@ -721,7 +721,7 @@ function hasBlockedImageTokens(url: string): boolean {
 function isLikelyProductUrl(url: string, storeSource: string): boolean {
   const value = url.toLowerCase()
 
-  if (storeSource === 'scandigolf' || storeSource === 'swegolf') {
+  if (storeSource === 'scandigolf') {
     return value.includes('/products/')
   }
 
