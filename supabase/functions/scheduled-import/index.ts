@@ -1448,9 +1448,16 @@ Deno.serve(async (req) => {
     // No body — run all sources
   }
 
+  // Prioritize store scraping first so Golfbidder categories are imported even if runtime budget is tight
+  sourcesToRun = [...new Set(sourcesToRun)].sort((a, b) => {
+    if (a === 'stores') return -1
+    if (b === 'stores') return 1
+    return 0
+  })
+
   const cutoffDate = new Date(Date.now() - maxAgeDays * 24 * 60 * 60 * 1000)
   console.log(
-    `[import] Mode: ${isManual ? 'manual' : 'scheduled'}, maxAgeDays: ${maxAgeDays}, maxListingsPerSource: ${maxListingsPerSource}, cutoff: ${cutoffDate.toISOString()}`
+    `[import] Mode: ${isManual ? 'manual' : 'scheduled'}, maxAgeDays: ${maxAgeDays}, maxListingsPerSource: ${maxListingsPerSource}, sources: ${sourcesToRun.join(', ')}, cutoff: ${cutoffDate.toISOString()}`
   )
 
   const importTask = async () => {
