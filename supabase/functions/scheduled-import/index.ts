@@ -744,6 +744,16 @@ function isLikelyProductUrl(url: string, storeSource: string): boolean {
     return value.includes('/products/') || value.includes('/produkt/') || value.includes('/shop/')
   }
 
+  if (storeSource === 'golfbidder') {
+    // Product URLs: /sv/brand-model-type (no /golfklubbor/ in path)
+    if (!value.includes('golfbidder.com/sv/')) return false
+    if (value.includes('/golfklubbor/') || value.includes('/golfklubbor?') || value.includes('/soekalternativ') || value.includes('/byt-salj')) return false
+    // Must be /sv/something with no further slashes (product page)
+    const afterSv = value.split('/sv/')[1]
+    if (!afterSv) return false
+    return !afterSv.includes('/') && afterSv.length > 5
+  }
+
   return value.includes('/products/') || value.includes('/produkt/')
 }
 
