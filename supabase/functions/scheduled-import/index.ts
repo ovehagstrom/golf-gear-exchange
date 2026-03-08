@@ -231,231 +231,254 @@ async function cacheExternalImagesToStorage(
 // Source fetchers
 // ============================================================
 
+const BLOCKET_QUERIES = [
+  'golf klubba',
+  'golf driver',
+  'golf järnset',
+  'golf putter',
+  'golf wedge',
+  'golf hybrid',
+  'golf fairwaywood',
+  'golfklubbor nyskick',
+  'driver nyskick',
+  'järnset nyskick',
+]
+
+const TRADERA_QUERIES = [
+  'golf klubba',
+  'golf driver',
+  'golf järnset',
+  'golf putter',
+  'golf wedge',
+  'golf hybrid',
+  'golf fairwaywood',
+  'golfklubbor nyskick',
+  'driver nyskick',
+  'järnset nyskick',
+]
+
+function dedupeListingsBySourceId(listings: ExternalListingInput[]): ExternalListingInput[] {
+  const seen = new Set<string>()
+  const deduped: ExternalListingInput[] = []
+
+  for (const listing of listings) {
+    const key = `${listing.source}:${listing.source_id}`
+    if (seen.has(key)) continue
+    seen.add(key)
+    deduped.push(listing)
+  }
+
+  return deduped
+}
+
 async function fetchBlocket(): Promise<ExternalListingInput[]> {
   const API_URL = 'https://www.blocket.se/recommerce/forsale/search/api/search/SEARCH_ID_BAP_COMMON'
   const TIMEOUT_MS = 15_000
-  const results: ExternalListingInput[] = []
+  const allResults: ExternalListingInput[] = []
 
-  const params = new URLSearchParams({
-    q: 'golf klubba',
-    lim: '1000',
-    sort: 'PUBLISHED_DESC',
-  })
-
-  const url = `${API_URL}?${params.toString()}`
-  console.log(`[Blocket] Fetching from API: ${url}`)
-
-  try {
-    const controller = new AbortController()
-    const timer = setTimeout(() => controller.abort(), TIMEOUT_MS)
-
-    const response = await fetch(url, {
-      signal: controller.signal,
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (compatible; GolfMarket/1.0)',
-        'Accept': 'application/json',
-      },
+  for (const query of BLOCKET_QUERIES) {
+    const params = new URLSearchParams({
+      q: query,
+      lim: '250',
+      sort: 'PUBLISHED_DESC',
     })
-    clearTimeout(timer)
 
-    console.log(`[Blocket] HTTP ${response.status}`)
+    const url = `${API_URL}?${params.toString()}`
+    console.log(`[Blocket] Fetching query="${query}"`)
 
-    if (!response.ok) {
-      const body = await response.text().catch(() => '')
-      console.error(`[Blocket] API error ${response.status}: ${body.substring(0, 300)}`)
-      return []
-    }
+    try {
+      const controller = new AbortController()
+      const timer = setTimeout(() => controller.abort(), TIMEOUT_MS)
 
-    const data = await response.json()
-    const ads = data?.docs || data?.data || []
-    console.log(`[Blocket] API returned ${ads.length} ads`)
+      const response = await fetch(url, {
+        signal: controller.signal,
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (compatible; GolfMarket/1.0)',
+          'Accept': 'application/json',
+        },
+      })
+      clearTimeout(timer)
 
-    if (ads.length === 0) {
-      console.warn('[Blocket] API returned 0 ads')
-      return []
-    }
+      if (!response.ok) {
+        const body = await response.text().catch(() => '')
+        console.error(`[Blocket] API error ${response.status} for query="${query}": ${body.substring(0, 200)}`)
+        continue
+      }
 
-    for (let i = 0; i < ads.length; i++) {
-      try {
-        const ad = ads[i]
-        const id = ad.id || ad.ad_id?.toString()
-        const heading = ad.heading || ad.title
-        const canonicalUrl = ad.canonical_url
-          ? (ad.canonical_url.startsWith('http') ? ad.canonical_url : `https://www.blocket.se${ad.canonical_url}`)
-          : `https://www.blocket.se/annons/${id}`
+      const data = await response.json()
+      const ads = data?.docs || data?.data || []
+      console.log(`[Blocket] query="${query}" returned ${ads.length} ads`)
 
-        if (!id || !heading) continue
+      for (const ad of ads) {
+        try {
+          const id = ad.id || ad.ad_id?.toString()
+          const heading = ad.heading || ad.title
+          if (!id || !heading) continue
 
-        const price = ad.price?.amount || undefined
-        const location = ad.location || undefined
-        const imageUrls = ad.image_urls?.length ? ad.image_urls : (ad.image?.url ? [ad.image.url] : [])
+          const canonicalUrl = ad.canonical_url
+            ? (ad.canonical_url.startsWith('http') ? ad.canonical_url : `https://www.blocket.se${ad.canonical_url}`)
+            : `https://www.blocket.se/annons/${id}`
 
-        let timestamp: string | undefined
-        if (ad.timestamp) {
-          const ts = Number(ad.timestamp)
-          const dateMs = ts > 32503680000 ? ts : ts * 1000
-          const d = new Date(dateMs)
-          if (d.getFullYear() >= 2020 && d.getFullYear() <= 2030) {
-            timestamp = d.toISOString()
+          const price = ad.price?.amount || undefined
+          const location = ad.location || undefined
+          const imageUrls = ad.image_urls?.length ? ad.image_urls : (ad.image?.url ? [ad.image.url] : [])
+
+          let timestamp: string | undefined
+          if (ad.timestamp) {
+            const ts = Number(ad.timestamp)
+            const dateMs = ts > 32503680000 ? ts : ts * 1000
+            const d = new Date(dateMs)
+            if (d.getFullYear() >= 2020 && d.getFullYear() <= 2035) {
+              timestamp = d.toISOString()
+            }
           }
-        }
 
-        results.push({
-          source: 'blocket',
-          source_id: id.toString(),
-          title: heading,
-          price,
-          city: location,
-          source_url: canonicalUrl,
-          image_urls: imageUrls,
-          description: undefined,
-          published_at: timestamp,
+          allResults.push({
+            source: 'blocket',
+            source_id: id.toString(),
+            title: heading,
+            price,
+            city: location,
+            source_url: canonicalUrl,
+            image_urls: imageUrls,
+            description: undefined,
+            published_at: timestamp,
             category: undefined,
-        })
-      } catch (itemErr) {
-        console.warn(`[Blocket] Ad ${i + 1} parse error:`, itemErr)
+          })
+        } catch (itemErr) {
+          console.warn('[Blocket] Ad parse error:', itemErr)
+        }
+      }
+    } catch (err) {
+      if (err instanceof DOMException && err.name === 'AbortError') {
+        console.error(`[Blocket] Query="${query}" timed out after ${TIMEOUT_MS}ms`)
+      } else {
+        console.error(`[Blocket] Query="${query}" fetch error:`, err)
       }
     }
-  } catch (err) {
-    if (err instanceof DOMException && err.name === 'AbortError') {
-      console.error(`[Blocket] Request timed out after ${TIMEOUT_MS}ms`)
-    } else {
-      console.error('[Blocket] Fetch error:', err)
-    }
-    return []
   }
 
-  console.log(`[Blocket] Fetched ${results.length} raw ads (pre-filter)`)
-  return results
+  const deduped = dedupeListingsBySourceId(allResults)
+  console.log(`[Blocket] Fetched ${allResults.length} raw ads, ${deduped.length} unique`)
+  return deduped
 }
 
 async function fetchTradera(): Promise<ExternalListingInput[]> {
   const TIMEOUT_MS = 15_000
-  const results: ExternalListingInput[] = []
+  const allResults: ExternalListingInput[] = []
 
-  // Tradera internal POST API (discovered from tradera_api Python package)
   const apiUrl = 'https://www.tradera.com/api/webapi/discover/web/independent-search'
-  const params = new URLSearchParams({
-    query: 'golf klubba',
-    sortBy: 'AddedOn',
-    categoryId: '25', // sport_fritid
-    itemStatus: 'unsold',
-    itemType: 'All',
-    automaticTranslationPreferred: 'true',
-    forceKeywordSearch: 'false',
-    includeFilters: 'false',
-    languageCodeIso2: 'sv',
-    searchTypeVariantHint: 'enrichemptysearchresult',
-    shippingCountryCodeIso2: 'SE',
-  })
-
-  const url = `${apiUrl}?${params.toString()}`
-  console.log(`[Tradera] Fetching from API: ${url}`)
 
   try {
-    const controller = new AbortController()
-    const timer = setTimeout(() => controller.abort(), TIMEOUT_MS)
+    const initController = new AbortController()
+    const initTimer = setTimeout(() => initController.abort(), TIMEOUT_MS)
 
-    // First do a GET to the homepage to get cookies (required by Tradera)
     const initResponse = await fetch('https://www.tradera.com/', {
-      signal: controller.signal,
+      signal: initController.signal,
       headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
       },
     })
-    await initResponse.text() // consume body
+    clearTimeout(initTimer)
+    await initResponse.text()
 
     const cookies = initResponse.headers.get('set-cookie') || ''
 
-    const response = await fetch(url, {
-      method: 'POST',
-      signal: controller.signal,
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Accept': 'application/json',
-        'Content-Type': 'application/json',
-        'Cookie': cookies,
-        'Referer': 'https://www.tradera.com/search?q=golf+driver',
-      },
-    })
-    clearTimeout(timer)
+    for (const query of TRADERA_QUERIES) {
+      const params = new URLSearchParams({
+        query,
+        sortBy: 'AddedOn',
+        categoryId: '25',
+        itemStatus: 'unsold',
+        itemType: 'All',
+        automaticTranslationPreferred: 'true',
+        forceKeywordSearch: 'false',
+        includeFilters: 'false',
+        languageCodeIso2: 'sv',
+        searchTypeVariantHint: 'enrichemptysearchresult',
+        shippingCountryCodeIso2: 'SE',
+      })
 
-    console.log(`[Tradera] HTTP ${response.status}`)
+      const url = `${apiUrl}?${params.toString()}`
+      console.log(`[Tradera] Fetching query="${query}"`)
 
-    if (!response.ok) {
-      const body = await response.text().catch(() => '')
-      console.error(`[Tradera] Error ${response.status}: ${body.substring(0, 300)}`)
-      return []
-    }
-
-    const data = await response.json()
-    
-    // The API returns items in various possible structures
-    const items = data?.items || data?.searchResult?.items || data?.result?.items || []
-    console.log(`[Tradera] API returned ${items.length} items`)
-
-    // Also check if data itself is an array
-    const itemList = Array.isArray(data) ? data : items
-
-    // Log first item structure for debugging
-    if (itemList.length > 0) {
-      console.log(`[Tradera] First item keys: ${Object.keys(itemList[0]).join(', ')}`)
-      console.log(`[Tradera] First item preview: ${JSON.stringify(itemList[0]).substring(0, 600)}`)
-    }
-
-    for (const item of itemList) {
       try {
-        const id = item.itemId?.toString() || item.id?.toString()
-        const title = item.shortDescription || item.title || item.heading
-        if (!id || !title) continue
+        const controller = new AbortController()
+        const timer = setTimeout(() => controller.abort(), TIMEOUT_MS)
 
-        const price = item.price || item.buyNowPrice || undefined
-        
-        // Tradera uses imageUrlTemplate with {format} placeholder.
-        // Valid formats are e.g. large-fit / medium-fit (item-img-* returns 404).
-        const imageUrls: string[] = []
-        if (item.imageUrlTemplate) {
-          imageUrls.push(item.imageUrlTemplate.replace('{format}', 'large-fit'))
-        }
-        if (item.imageSecondaryUrlTemplate) {
-          imageUrls.push(item.imageSecondaryUrlTemplate.replace('{format}', 'medium-fit'))
-        }
-        
-        const itemUrl = item.itemUrl || `/item/${id}`
-
-        results.push({
-          source: 'tradera',
-          source_id: id,
-          title,
-          price: price ? Math.round(Number(price)) : undefined,
-          city: undefined,
-          source_url: itemUrl.startsWith('http') ? itemUrl : `https://www.tradera.com${itemUrl}`,
-          image_urls: imageUrls,
-          description: item.description || undefined,
-          published_at: item.startDate || item.created || undefined,
-          category: undefined,
+        const response = await fetch(url, {
+          method: 'POST',
+          signal: controller.signal,
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Accept': 'application/json',
+            'Content-Type': 'application/json',
+            'Cookie': cookies,
+            'Referer': 'https://www.tradera.com/search?q=golf+driver',
+          },
         })
-      } catch (itemErr) {
-        console.warn(`[Tradera] Item parse error:`, itemErr)
+        clearTimeout(timer)
+
+        if (!response.ok) {
+          const body = await response.text().catch(() => '')
+          console.error(`[Tradera] Error ${response.status} for query="${query}": ${body.substring(0, 200)}`)
+          continue
+        }
+
+        const data = await response.json()
+        const items = data?.items || data?.searchResult?.items || data?.result?.items || []
+        const itemList = Array.isArray(data) ? data : items
+
+        console.log(`[Tradera] query="${query}" returned ${itemList.length} items`)
+
+        for (const item of itemList) {
+          try {
+            const id = item.itemId?.toString() || item.id?.toString()
+            const title = item.shortDescription || item.title || item.heading
+            if (!id || !title) continue
+
+            const price = item.price || item.buyNowPrice || undefined
+            const imageUrls: string[] = []
+            if (item.imageUrlTemplate) {
+              imageUrls.push(item.imageUrlTemplate.replace('{format}', 'large-fit'))
+            }
+            if (item.imageSecondaryUrlTemplate) {
+              imageUrls.push(item.imageSecondaryUrlTemplate.replace('{format}', 'medium-fit'))
+            }
+
+            const itemUrl = item.itemUrl || `/item/${id}`
+
+            allResults.push({
+              source: 'tradera',
+              source_id: id,
+              title,
+              price: price ? Math.round(Number(price)) : undefined,
+              city: undefined,
+              source_url: itemUrl.startsWith('http') ? itemUrl : `https://www.tradera.com${itemUrl}`,
+              image_urls: imageUrls,
+              description: item.description || undefined,
+              published_at: item.startDate || item.created || undefined,
+              category: undefined,
+            })
+          } catch (itemErr) {
+            console.warn('[Tradera] Item parse error:', itemErr)
+          }
+        }
+      } catch (err) {
+        if (err instanceof DOMException && err.name === 'AbortError') {
+          console.error(`[Tradera] Query="${query}" timed out after ${TIMEOUT_MS}ms`)
+        } else {
+          console.error(`[Tradera] Query="${query}" fetch error:`, err)
+        }
       }
     }
-
-    // If no items found via API, log the response structure for debugging
-    if (results.length === 0) {
-      const keys = Object.keys(data || {})
-      console.log(`[Tradera] Response keys: ${keys.join(', ')}`)
-      console.log(`[Tradera] Response preview: ${JSON.stringify(data).substring(0, 500)}`)
-    }
   } catch (err) {
-    if (err instanceof DOMException && err.name === 'AbortError') {
-      console.error(`[Tradera] Request timed out after ${TIMEOUT_MS}ms`)
-    } else {
-      console.error('[Tradera] Fetch error:', err)
-    }
+    console.error('[Tradera] Initialization failed:', err)
   }
 
-  console.log(`[Tradera] Extracted ${results.length} ads`)
-  return results
+  const deduped = dedupeListingsBySourceId(allResults)
+  console.log(`[Tradera] Extracted ${allResults.length} raw ads, ${deduped.length} unique`)
+  return deduped
 }
 
 async function fetchFacebook(): Promise<ExternalListingInput[]> {
@@ -464,6 +487,7 @@ async function fetchFacebook(): Promise<ExternalListingInput[]> {
   console.log('[Facebook] No public API available — skipping (requires data provider integration)')
   return []
 }
+
 
 const SOURCE_FETCHERS: Record<string, () => Promise<ExternalListingInput[]>> = {
   blocket: fetchBlocket,
