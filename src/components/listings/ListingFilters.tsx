@@ -48,6 +48,7 @@ const SOURCES = [
   { value: 'golfdeal', label: 'Golfdeal.se' },
   { value: 'golfbidder', label: 'Golfbidder.se' },
   { value: 'golfreuse', label: 'Golfreuse.se' },
+  { value: 'dormy_outlet', label: 'Dormy Outlet' },
 ];
 
 interface ListingFiltersProps {
