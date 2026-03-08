@@ -933,6 +933,7 @@ function isLikelyImageUrl(url: string): boolean {
     if (/\.(jpg|jpeg|png|webp|avif|gif)$/.test(pathname)) return true
     if (hostname.includes('cdn.shopify.com') && (pathname.includes('/products/') || pathname.includes('/files/'))) return true
     if (pathname.includes('/products/') && (pathname.includes('/cdn/') || pathname.includes('/media/'))) return true
+    if (hostname.includes('golfbidder.com') && pathname.includes('/media/catalog/product/')) return true
     return false
   } catch {
     return false
