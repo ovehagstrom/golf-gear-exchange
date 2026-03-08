@@ -532,16 +532,7 @@ const GOLF_STORES: StoreConfig[] = [
       'https://www.scandigolf.se/collections/putters',
     ],
   },
-  {
-    name: 'Swegolf',
-    source: 'swegolf',
-    urls: [
-      'https://www.swegolf.se/collections/golfklubbor',
-      'https://www.swegolf.se/collections/drivers',
-      'https://www.swegolf.se/collections/jarnset',
-      'https://www.swegolf.se/collections/putters',
-    ],
-  },
+  // Swegolf removed — domain expired/for sale as of 2026-03
   {
     name: 'Dimbo Golf',
     source: 'dimbo-golf',
