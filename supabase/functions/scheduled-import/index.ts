@@ -745,7 +745,7 @@ async function scrapeWithFirecrawl(url: string): Promise<ScrapeResult | null> {
       body: JSON.stringify({
         url,
         formats: ['markdown', 'html'],
-        onlyMainContent: true,
+        onlyMainContent: false,
         waitFor: 5000,
       }),
     })
