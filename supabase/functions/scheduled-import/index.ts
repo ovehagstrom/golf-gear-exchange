@@ -566,13 +566,6 @@ const GOLF_STORES: StoreConfig[] = [
     ],
   },
   {
-    name: 'Golfprylar',
-    source: 'golfprylar',
-    urls: [
-      'https://www.golfprylar.se/golfklubbor',
-    ],
-  },
-  {
     name: 'FJ Sweden',
     source: 'fjsweden',
     urls: [
