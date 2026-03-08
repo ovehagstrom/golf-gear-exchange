@@ -893,27 +893,38 @@ Max 30 produkter.`,
     const products = JSON.parse(jsonMatch[0])
     if (!Array.isArray(products)) return []
 
-    return products
-      .filter((p: Record<string, unknown>) => p.title && typeof p.title === 'string')
-      .map((p: Record<string, unknown>, index: number) => {
-        const aiImageRaw = typeof p.image_url === 'string' ? p.image_url : undefined
-        const aiImage = aiImageRaw && isLikelyImageUrl(aiImageRaw) ? aiImageRaw : undefined
-        const fallbackImage = fallbackImages.find(isLikelyImageUrl)
-        const chosenImage = aiImage || fallbackImage
+    const result: ExternalListingInput[] = []
 
-        return {
-          source: storeName.toLowerCase().replace(/[^a-z0-9]/g, '_'),
-          source_id: `${storeName.toLowerCase().replace(/[^a-z0-9]/g, '_')}-${(p.title as string).toLowerCase().replace(/[^a-z0-9åäö]/g, '-').substring(0, 60)}`,
-          title: p.title as string,
-          price: typeof p.price === 'number' ? Math.round(p.price) : undefined,
-          city: undefined,
-          source_url: sourceUrl,
-          image_urls: chosenImage ? [chosenImage] : [],
-          description: undefined,
-          published_at: new Date().toISOString(),
-          category: (p.category as string) || undefined,
-        }
+    for (const [index, p] of products.entries()) {
+      if (!p || typeof p !== 'object' || !('title' in p) || typeof p.title !== 'string') continue
+
+      const aiImageRaw = typeof p.image_url === 'string' ? p.image_url : undefined
+      let resolvedImage: string | undefined
+
+      if (aiImageRaw && isLikelyImageUrl(aiImageRaw)) {
+        resolvedImage = aiImageRaw
+      } else if (aiImageRaw && aiImageRaw.includes('/products/')) {
+        resolvedImage = await resolveImageFromProductUrl(aiImageRaw)
+      }
+
+      const fallbackImage = fallbackImages.find(isLikelyImageUrl) || fallbackImages[index]
+      const chosenImage = resolvedImage || fallbackImage
+
+      result.push({
+        source: storeName.toLowerCase().replace(/[^a-z0-9]/g, '_'),
+        source_id: `${storeName.toLowerCase().replace(/[^a-z0-9]/g, '_')}-${(p.title as string).toLowerCase().replace(/[^a-z0-9åäö]/g, '-').substring(0, 60)}`,
+        title: p.title as string,
+        price: typeof p.price === 'number' ? Math.round(p.price) : undefined,
+        city: undefined,
+        source_url: sourceUrl,
+        image_urls: chosenImage ? [chosenImage] : [],
+        description: undefined,
+        published_at: new Date().toISOString(),
+        category: (p.category as string) || undefined,
       })
+    }
+
+    return result
   } catch (err) {
     console.error('[AI] Product extraction error:', err)
     return []
